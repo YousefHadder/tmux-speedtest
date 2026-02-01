@@ -4,6 +4,17 @@ A tmux plugin to run internet speed tests and display results in your status bar
 
 ![Demo](https://img.shields.io/badge/status-beta-yellow)
 
+## Screenshots
+
+### Waiting for results:
+
+<img width="156" height="25" alt="Screenshot 2026-02-01 at 12 27 52 PM" src="https://github.com/user-attachments/assets/d2eab7b3-0d04-4ca3-80ff-b7d5bce63e6f" />
+
+### After results:
+
+<img width="295" height="26" alt="Screenshot 2026-02-01 at 12 27 40 PM" src="https://github.com/user-attachments/assets/dcbac9b9-4b48-4907-9553-d212c3666f6b" />
+
+
 ## Features
 
 - Run speedtest with a single keypress (`prefix + o` by default)
