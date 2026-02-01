@@ -94,34 +94,58 @@ find_sivel_binary() {
     echo ""
 }
 
-# Detect available speedtest CLI and return the command to use
-# Returns: "ookla:<cmd>", "sivel:<cmd>", or "none"
-detect_speedtest_cli() {
-    local prefer
-    prefer=$(get_tmux_option "@speedtest_prefer" "auto")
+# Find the fast-cli binary (Netflix fast.com)
+find_fast_binary() {
+    if command -v fast &>/dev/null; then
+        echo "fast"
+        return
+    fi
 
-    # If user explicitly prefers one, try to find it
-    if [[ "$prefer" == "ookla" ]]; then
+    echo ""
+}
+
+# Detect available speedtest CLI and return the command to use
+# Returns: "ookla:<cmd>", "sivel:<cmd>", "fast:<cmd>", or "none"
+detect_speedtest_cli() {
+    local provider
+    provider=$(get_tmux_option "@speedtest_provider" "auto")
+
+    # If user explicitly specifies a provider, try to find it
+    if [[ "$provider" == "ookla" ]]; then
         local ookla_cmd
         ookla_cmd=$(find_ookla_binary)
         if [[ -n "$ookla_cmd" ]]; then
             echo "ookla:$ookla_cmd"
             return
         fi
-    elif [[ "$prefer" == "sivel" ]]; then
+    elif [[ "$provider" == "sivel" ]]; then
         local sivel_cmd
         sivel_cmd=$(find_sivel_binary)
         if [[ -n "$sivel_cmd" ]]; then
             echo "sivel:$sivel_cmd"
             return
         fi
+    elif [[ "$provider" == "fast" ]]; then
+        local fast_cmd
+        fast_cmd=$(find_fast_binary)
+        if [[ -n "$fast_cmd" ]]; then
+            echo "fast:$fast_cmd"
+            return
+        fi
     fi
 
-    # Auto-detect: prefer Ookla (more reliable), fallback to sivel
+    # Auto-detect: prefer Ookla, then fast, then sivel
     local ookla_cmd
     ookla_cmd=$(find_ookla_binary)
     if [[ -n "$ookla_cmd" ]]; then
         echo "ookla:$ookla_cmd"
+        return
+    fi
+
+    local fast_cmd
+    fast_cmd=$(find_fast_binary)
+    if [[ -n "$fast_cmd" ]]; then
+        echo "fast:$fast_cmd"
         return
     fi
 
@@ -136,8 +160,8 @@ detect_speedtest_cli() {
 }
 
 # Format speed with auto-scaling (bps to Mbps/Gbps)
-# Input: speed in bits per second (for sivel) or bytes per second (for ookla)
-# Usage: format_speed <value> <source: ookla|sivel>
+# Input: speed in bits per second (for sivel), bytes per second (for ookla), or Mbps (for fast)
+# Usage: format_speed <value> <source: ookla|sivel|fast>
 format_speed() {
     local value="$1"
     local source="$2"
@@ -152,6 +176,9 @@ format_speed() {
     if [[ "$source" == "ookla" ]]; then
         # Ookla reports in bytes per second, convert to Mbps
         mbps=$(echo "scale=2; $value * 8 / 1000000" | bc)
+    elif [[ "$source" == "fast" ]]; then
+        # fast-cli reports directly in Mbps
+        mbps="$value"
     else
         # sivel reports in bits per second, convert to Mbps
         mbps=$(echo "scale=2; $value / 1000000" | bc)

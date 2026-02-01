@@ -39,7 +39,7 @@ run_speedtest_background() {
     CLI_RESULT=$(detect_speedtest_cli)
 
     if [[ "$CLI_RESULT" == "none" ]]; then
-        tmux display-message "speedtest: No CLI found (install speedtest or speedtest-cli)"
+        tmux display-message "speedtest: No CLI found (install speedtest, speedtest-cli, or fast-cli)"
         sleep 2
         set_tmux_option "@speedtest_result" "$PREVIOUS_RESULT"
         tmux refresh-client -S
@@ -57,7 +57,12 @@ run_speedtest_background() {
             cmd="$cmd --server-id=$SERVER"
         fi
         OUTPUT=$(eval "$cmd" 2>/dev/null)
+    elif [[ "$CLI_TYPE" == "fast" ]]; then
+        # fast-cli (Netflix fast.com)
+        local cmd="\"$CLI_CMD\" --json --upload"
+        OUTPUT=$(eval "$cmd" 2>/dev/null)
     else
+        # sivel speedtest-cli
         local cmd="\"$CLI_CMD\" --json"
         if [[ -n "$SERVER" ]]; then
             cmd="$cmd --server=$SERVER"
@@ -83,6 +88,12 @@ run_speedtest_background() {
         download=$(echo "$OUTPUT" | grep -oE '"bandwidth":\s*[0-9.]+' | head -1 | grep -oE '[0-9.]+')
         upload=$(echo "$OUTPUT" | grep -oE '"bandwidth":\s*[0-9.]+' | tail -1 | grep -oE '[0-9.]+')
         ping_val=$(echo "$OUTPUT" | grep -oE '"latency":\s*[0-9.]+' | head -1 | grep -oE '[0-9.]+')
+    elif [[ "$CLI_TYPE" == "fast" ]]; then
+        # fast-cli JSON structure:
+        # { "downloadSpeed": <Mbps>, "uploadSpeed": <Mbps>, "latency": <ms>, ... }
+        download=$(echo "$OUTPUT" | grep -oE '"downloadSpeed":\s*[0-9.]+' | grep -oE '[0-9.]+')
+        upload=$(echo "$OUTPUT" | grep -oE '"uploadSpeed":\s*[0-9.]+' | grep -oE '[0-9.]+')
+        ping_val=$(echo "$OUTPUT" | grep -oE '"latency":\s*[0-9.]+' | grep -oE '[0-9.]+')
     else
         # sivel JSON structure:
         # { "download": <bits/s>, "upload": <bits/s>, "ping": <ms> }
