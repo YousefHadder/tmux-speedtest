@@ -13,4 +13,6 @@ set_tmux_option "@speedtest_result" "$ICON_IDLE"
 # Refresh status line
 tmux refresh-client -S
 
-tmux display-message "speedtest: Results cleared"
+if [[ "$(get_tmux_option "@speedtest_notifications" "on")" != "off" ]]; then
+    tmux display-message "speedtest: Results cleared"
+fi

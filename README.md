@@ -148,6 +148,9 @@ set -g @speedtest_provider 'auto'
 
 # Use specific server ID (default: auto-select, only works with ookla/sivel)
 set -g @speedtest_server ''
+
+# Enable/Disable notifications (default: on)
+set -g @speedtest_notifications 'on'
 ```
 
 ### Format Placeholders

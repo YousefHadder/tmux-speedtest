@@ -144,11 +144,16 @@ run_speedtest_background() {
     set_tmux_option "@speedtest_result" "$RESULT"
     tmux refresh-client -S
 
-    tmux display-message "speedtest: Done - $RESULT"
+    # Show notification if not disabled
+    if [[ "$(get_tmux_option "@speedtest_notifications" "on")" != "off" ]]; then
+        tmux display-message "speedtest: Done - $RESULT"
+    fi
 }
 
 # Launch in background and detach
 run_speedtest_background &
 disown
 
-tmux display-message "speedtest: Starting..."
+if [[ "$(get_tmux_option "@speedtest_notifications" "on")" != "off" ]]; then
+    tmux display-message "speedtest: Starting..."
+fi
