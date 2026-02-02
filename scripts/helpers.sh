@@ -8,7 +8,18 @@ get_tmux_option() {
 
     option_value=$(tmux show-option -gqv "$option")
     if [[ -z "$option_value" ]]; then
-        echo "$default_value"
+        # If the option value is empty, it MIGHT be because it's not set,
+        # OR it might be explicitly set to empty string.
+        # We need to distinguish between "unset" and "set to empty".
+
+        # Check if the option is actually set in the global options
+        if tmux show-option -g "$option" >/dev/null 2>&1; then
+            # It is set (but empty), so return empty
+            echo ""
+        else
+            # It is not set, so return default
+            echo "$default_value"
+        fi
     else
         echo "$option_value"
     fi
@@ -104,8 +115,18 @@ find_fast_binary() {
     echo ""
 }
 
+# Find the Cloudflare speedtest CLI binary
+find_cloudflare_binary() {
+    if command -v cloudflare-speed-cli &>/dev/null; then
+        echo "cloudflare-speed-cli"
+        return
+    fi
+
+    echo ""
+}
+
 # Detect available speedtest CLI and return the command to use
-# Returns: "ookla:<cmd>", "sivel:<cmd>", "fast:<cmd>", or "none"
+# Returns: "ookla:<cmd>", "sivel:<cmd>", "fast:<cmd>", "cloudflare:<cmd>", or "none"
 detect_speedtest_cli() {
     local provider
     provider=$(get_tmux_option "@speedtest_provider" "auto")
@@ -116,6 +137,13 @@ detect_speedtest_cli() {
         ookla_cmd=$(find_ookla_binary)
         if [[ -n "$ookla_cmd" ]]; then
             echo "ookla:$ookla_cmd"
+            return
+        fi
+    elif [[ "$provider" == "cloudflare" ]]; then
+        local cf_cmd
+        cf_cmd=$(find_cloudflare_binary)
+        if [[ -n "$cf_cmd" ]]; then
+            echo "cloudflare:$cf_cmd"
             return
         fi
     elif [[ "$provider" == "sivel" ]]; then
@@ -134,11 +162,18 @@ detect_speedtest_cli() {
         fi
     fi
 
-    # Auto-detect: prefer Ookla, then fast, then sivel
+    # Auto-detect: prefer Ookla, then Cloudflare, then fast, then sivel
     local ookla_cmd
     ookla_cmd=$(find_ookla_binary)
     if [[ -n "$ookla_cmd" ]]; then
         echo "ookla:$ookla_cmd"
+        return
+    fi
+
+    local cf_cmd
+    cf_cmd=$(find_cloudflare_binary)
+    if [[ -n "$cf_cmd" ]]; then
+        echo "cloudflare:$cf_cmd"
         return
     fi
 
@@ -176,8 +211,8 @@ format_speed() {
     if [[ "$source" == "ookla" ]]; then
         # Ookla reports in bytes per second, convert to Mbps
         mbps=$(echo "scale=2; $value * 8 / 1000000" | bc)
-    elif [[ "$source" == "fast" ]]; then
-        # fast-cli reports directly in Mbps
+    elif [[ "$source" == "fast" || "$source" == "cloudflare" ]]; then
+        # fast-cli and cloudflare-speed-cli report directly in Mbps
         mbps="$value"
     else
         # sivel reports in bits per second, convert to Mbps

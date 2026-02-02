@@ -29,7 +29,13 @@ run_speedtest_background() {
     SERVER=$(get_tmux_option "@speedtest_server" "")
 
     # Store current result (to restore on failure)
-    PREVIOUS_RESULT=$(get_tmux_option "@speedtest_result" "$ICON_IDLE")
+    # If currently hidden (empty), use idle icon as fallback
+    CURRENT_VAL=$(get_tmux_option "@speedtest_result" "")
+    if [[ -z "$CURRENT_VAL" ]]; then
+        PREVIOUS_RESULT="$ICON_IDLE"
+    else
+        PREVIOUS_RESULT="$CURRENT_VAL"
+    fi
 
     # Show running indicator
     set_tmux_option "@speedtest_result" "$ICON_RUNNING Testing..."
@@ -60,6 +66,10 @@ run_speedtest_background() {
     elif [[ "$CLI_TYPE" == "fast" ]]; then
         # fast-cli (Netflix fast.com)
         local cmd="\"$CLI_CMD\" --json --upload"
+        OUTPUT=$(eval "$cmd" 2>/dev/null)
+    elif [[ "$CLI_TYPE" == "cloudflare" ]]; then
+        # cloudflare-speed-cli
+        local cmd="\"$CLI_CMD\" --json"
         OUTPUT=$(eval "$cmd" 2>/dev/null)
     else
         # sivel speedtest-cli
@@ -94,6 +104,27 @@ run_speedtest_background() {
         download=$(echo "$OUTPUT" | grep -oE '"downloadSpeed":\s*[0-9.]+' | grep -oE '[0-9.]+')
         upload=$(echo "$OUTPUT" | grep -oE '"uploadSpeed":\s*[0-9.]+' | grep -oE '[0-9.]+')
         ping_val=$(echo "$OUTPUT" | grep -oE '"latency":\s*[0-9.]+' | grep -oE '[0-9.]+')
+    elif [[ "$CLI_TYPE" == "cloudflare" ]]; then
+        # cloudflare-speed-cli JSON structure:
+        # Use python for robust JSON parsing
+        local PYTHON_CMD=""
+        if command -v python3 &>/dev/null; then
+             PYTHON_CMD="python3"
+        elif command -v python &>/dev/null; then
+             PYTHON_CMD="python"
+        fi
+
+        if [[ -n "$PYTHON_CMD" ]]; then
+            # Use '<<< "$OUTPUT"' to pass string to stdin, avoiding echo pipe issues or content display
+            download=$($PYTHON_CMD -c "import sys, json; print(json.load(sys.stdin).get('download', {}).get('mbps', 0))" <<< "$OUTPUT")
+            upload=$($PYTHON_CMD -c "import sys, json; print(json.load(sys.stdin).get('upload', {}).get('mbps', 0))" <<< "$OUTPUT")
+            ping_val=$($PYTHON_CMD -c "import sys, json; print(json.load(sys.stdin).get('idle_latency', {}).get('median_ms', 0))" <<< "$OUTPUT")
+        else
+            # Fallback to grep if no python (less robust)
+            download=$(echo "$OUTPUT" | grep -oE '"mbps":\s*[0-9.]+' | head -1 | grep -oE '[0-9.]+')
+            upload=$(echo "$OUTPUT" | grep -oE '"mbps":\s*[0-9.]+' | tail -1 | grep -oE '[0-9.]+')
+            ping_val=$(echo "$OUTPUT" | grep -oE '"median_ms":\s*[0-9.]+' | head -1 | grep -oE '[0-9.]+')
+        fi
     else
         # sivel JSON structure:
         # { "download": <bits/s>, "upload": <bits/s>, "ping": <ms> }
@@ -114,11 +145,16 @@ run_speedtest_background() {
     set_tmux_option "@speedtest_result" "$RESULT"
     tmux refresh-client -S
 
-    tmux display-message "speedtest: Done - $RESULT"
+    # Show notification if not disabled
+    if [[ "$(get_tmux_option "@speedtest_notifications" "on")" != "off" ]]; then
+        tmux display-message "speedtest: Done - $RESULT"
+    fi
 }
 
 # Launch in background and detach
 run_speedtest_background &
 disown
 
-tmux display-message "speedtest: Starting..."
+if [[ "$(get_tmux_option "@speedtest_notifications" "on")" != "off" ]]; then
+    tmux display-message "speedtest: Starting..."
+fi

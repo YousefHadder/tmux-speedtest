@@ -6,12 +6,15 @@ source "$CURRENT_DIR/scripts/helpers.sh"
 
 # Get user configuration
 KEY=$(get_tmux_option "@speedtest_key" "o")
+CLEAR_KEY=$(get_tmux_option "@speedtest_clear_key" "O")
 
 # Set up key binding (use -b for background/non-blocking execution)
 tmux bind-key "$KEY" run-shell -b "$CURRENT_DIR/scripts/speedtest.sh"
+tmux bind-key "$CLEAR_KEY" run-shell -b "$CURRENT_DIR/scripts/clear.sh"
 
 # Set up status bar interpolation
 # This allows users to use #{speedtest_result} in their status bar
+# Default to empty string so it doesn't show initially if auto-hide is desired
 tmux set-option -gq @speedtest_result "$(get_tmux_option "@speedtest_icon_idle" "—")"
 
 # Register the format interpolation

@@ -25,7 +25,8 @@ A tmux plugin to run internet speed tests and display results in your status bar
 - Run speedtest with a single keypress (`prefix + o` by default)
 - **Non-blocking** - tmux remains fully responsive while test runs
 - Results persist in status bar until next test
-- Auto-detects available CLI (Ookla `speedtest`, `fast-cli`, or `speedtest-cli`)
+- Clear results with a keypress (`prefix + O` by default)
+- Auto-detects available CLI (Ookla `speedtest`, `cloudflare-speed-cli`, `fast-cli`, or `speedtest-cli`)
 - Auto-scales units (Mbps/Gbps)
 - Fully configurable format, icons, and key bindings
 - Shows progress indicator while running
@@ -36,6 +37,7 @@ A tmux plugin to run internet speed tests and display results in your status bar
 One of the following speedtest CLI tools must be installed:
 
 - [Ookla Speedtest CLI](https://www.speedtest.net/apps/cli) (recommended)
+- [cloudflare-speed-cli](https://github.com/kavehtehrani/cloudflare-speed-cli) (Cloudflare)
 - [fast-cli](https://github.com/sindresorhus/fast-cli) (Netflix's fast.com)
 - [speedtest-cli](https://github.com/sivel/speedtest-cli) (Python)
 
@@ -52,6 +54,21 @@ curl -s https://packagecloud.io/install/repositories/ookla/speedtest-cli/script.
 sudo apt install speedtest
 ```
 
+**cloudflare-speed-cli:**
+
+Works for both Intel and Silicon Macs.
+
+Using [Cargo](https://doc.rust-lang.org/cargo/):
+```bash
+cargo install --git https://github.com/kavehtehrani/cloudflare-speed-cli --features tui
+```
+
+Using [Homebrew](https://brew.sh/):
+```bash
+brew tap kavehtehrani/tap
+brew install cloudflare-speed-cli
+```
+
 **fast-cli (Netflix fast.com):**
 ```bash
 npm install --global fast-cli
@@ -66,7 +83,7 @@ pip install speedtest-cli
 brew install speedtest-cli
 ```
 
-> **Auto-detection priority:** Ookla → fast-cli → speedtest-cli
+> **Auto-detection priority:** Ookla → Cloudflare → fast-cli → speedtest-cli
 
 ## Installation
 
@@ -113,6 +130,9 @@ Add these to your `~/.tmux.conf` before the plugin loads:
 # Key binding (default: o)
 set -g @speedtest_key 'o'
 
+# Key binding to clear results (default: O)
+set -g @speedtest_clear_key 'O'
+
 # Output format (default shown)
 set -g @speedtest_format '↓ #{download} ↑ #{upload} #{ping}'
 
@@ -120,13 +140,17 @@ set -g @speedtest_format '↓ #{download} ↑ #{upload} #{ping}'
 set -g @speedtest_icon_running '⏳'
 
 # Icon shown when no result yet (default: —)
+# Set to "" (empty string) to auto-hide the plugin when idle
 set -g @speedtest_icon_idle '—'
 
-# Speedtest provider: auto, ookla, fast, or sivel (default: auto)
+# Speedtest provider: auto, ookla, fast, cloudflare, or sivel (default: auto)
 set -g @speedtest_provider 'auto'
 
 # Use specific server ID (default: auto-select, only works with ookla/sivel)
 set -g @speedtest_server ''
+
+# Enable/Disable notifications (default: on)
+set -g @speedtest_notifications 'on'
 ```
 
 ### Format Placeholders
@@ -154,6 +178,12 @@ set -g @speedtest_format '🌐 ⬇#{download} ⬆#{upload} 📶#{ping}'
 set -g @speedtest_format 'D:#{download} U:#{upload} P:#{ping}'
 ```
 
+**Nerd Fonts:**
+```bash
+set -g @speedtest_icon_running '󰔟'
+set -g @speedtest_format ' #{download}  #{upload} 󰛳 #{ping}'
+```
+
 ### Catppuccin Theme Integration
 
 If you're using [catppuccin/tmux](https://github.com/catppuccin/tmux), create a custom module file:
@@ -176,8 +206,10 @@ Then in your `~/.tmux.conf`:
 source -F '#{HOME}/.config/tmux/custom_modules/ctp_speedtest.conf'
 
 # Add to your status bar
-set -g status-left '#{E:@catppuccin_status_session}'
-set -ag status-left '#{E:@catppuccin_status_ctp_speedtest}'
+# To auto-hide the module when idle (if @speedtest_icon_idle is empty), use conditional logic:
+set -ag status-left "#{?#(~/.tmux/plugins/tmux-speedtest/scripts/speedtest_status.sh),#{E:@catppuccin_status_ctp_speedtest},}"
+# Or just display it always:
+# set -ag status-left '#{E:@catppuccin_status_ctp_speedtest}'
 ```
 
 ## Troubleshooting
