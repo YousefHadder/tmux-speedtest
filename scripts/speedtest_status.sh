@@ -16,14 +16,14 @@ if [[ -z "$RESULT" ]]; then
     if [[ -n "$ICON_IDLE" ]]; then
          echo "$ICON_IDLE"
     else
-         echo ""
+         printf ""
     fi
 elif [[ "$RESULT" == "$ICON_IDLE" ]]; then
     # If result explicitly matches idle icon
     if [[ -n "$ICON_IDLE" ]]; then
          echo "$ICON_IDLE"
     else
-         echo ""
+         printf ""
     fi
 else
     # Active result

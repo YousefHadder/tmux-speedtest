@@ -107,6 +107,7 @@ run_speedtest_background() {
     elif [[ "$CLI_TYPE" == "cloudflare" ]]; then
         # cloudflare-speed-cli JSON structure:
         # Use python for robust JSON parsing
+        local PYTHON_CMD=""
         if command -v python3 &>/dev/null; then
              PYTHON_CMD="python3"
         elif command -v python &>/dev/null; then
