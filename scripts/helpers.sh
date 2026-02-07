@@ -126,6 +126,7 @@ find_sivel_binary() {
 # Find the fast-cli binary (Netflix fast.com)
 find_fast_binary() {
     local paths=(
+        "/opt/homebrew/bin/fast"                                        # Homebrew ARM64
         "$HOME/.npm-global/bin/fast"                                    # npm custom prefix
         "$HOME/.local/bin/fast"                                         # some npm configs
         "/usr/local/bin/fast"                                           # system npm install
