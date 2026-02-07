@@ -32,17 +32,62 @@ run_comparison() {
         exit 0
     fi
 
-    tmux display-message "speedtest: Comparing ${#PROVIDERS[@]} providers..."
+    tmux display-message "speedtest: Comparing ${#PROVIDERS[@]} providers in parallel..."
 
     TIMEOUT_SECS=$(get_tmux_option "@speedtest_timeout" "120")
     if ! [[ "$TIMEOUT_SECS" =~ ^[0-9]+$ ]]; then
         TIMEOUT_SECS=120
     fi
 
+    # Launch all providers in parallel, each writing JSON to its own temp file
+    local pids=()
+    local output_files=()
+    local cli_types=()
+
+    local provider_info cli_type cli_cmd
+    for provider_info in "${PROVIDERS[@]}"; do
+        cli_type="${provider_info%%:*}"
+        cli_cmd="${provider_info#*:}"
+        cli_types+=("$cli_type")
+
+        local outfile
+        outfile=$(mktemp)
+        output_files+=("$outfile")
+
+        # Build and execute command in background
+        (
+            local cmd=()
+            case "$cli_type" in
+                ookla)      cmd=( "$cli_cmd" --format=json --accept-license --accept-gdpr ) ;;
+                fast)       cmd=( "$cli_cmd" --json --upload ) ;;
+                cloudflare) cmd=( "$cli_cmd" --json ) ;;
+                sivel|*)    cmd=( "$cli_cmd" --json ) ;;
+            esac
+
+            if command -v timeout &>/dev/null; then
+                timeout "$TIMEOUT_SECS" "${cmd[@]}" > "$outfile" 2>/dev/null || true
+            else
+                "${cmd[@]}" > "$outfile" 2>/dev/null &
+                local child=$!
+                ( sleep "$TIMEOUT_SECS" && kill "$child" 2>/dev/null ) &
+                local watcher=$!
+                wait "$child" 2>/dev/null
+                kill "$watcher" 2>/dev/null
+                wait "$watcher" 2>/dev/null
+            fi
+        ) &
+        pids+=($!)
+    done
+
+    # Wait for all providers to finish
+    for pid in "${pids[@]}"; do
+        wait "$pid" 2>/dev/null
+    done
+
+    # Build results table
     local results_file
     results_file=$(mktemp)
 
-    # Header
     cat > "$results_file" <<HEADER
 
   Provider Comparison - $(date "+%Y-%m-%d %H:%M:%S")
@@ -52,39 +97,12 @@ run_comparison() {
   --------------------------------------------------
 HEADER
 
-    # Test each provider sequentially
-    local provider_info cli_type cli_cmd
-    for provider_info in "${PROVIDERS[@]}"; do
-        cli_type="${provider_info%%:*}"
-        cli_cmd="${provider_info#*:}"
-
-        tmux display-message "speedtest: Testing $cli_type..."
-
-        # Build command
-        local cmd=()
-        case "$cli_type" in
-            ookla)      cmd=( "$cli_cmd" --format=json --accept-license --accept-gdpr ) ;;
-            fast)       cmd=( "$cli_cmd" --json --upload ) ;;
-            cloudflare) cmd=( "$cli_cmd" --json ) ;;
-            sivel|*)    cmd=( "$cli_cmd" --json ) ;;
-        esac
-
-        # Execute with timeout
-        local output=""
-        if command -v timeout &>/dev/null; then
-            output=$(timeout "$TIMEOUT_SECS" "${cmd[@]}" 2>/dev/null) || true
-        else
-            local tmpfile
-            tmpfile=$(mktemp)
-            "${cmd[@]}" > "$tmpfile" 2>/dev/null &
-            local child=$!
-            ( sleep "$TIMEOUT_SECS" && kill "$child" 2>/dev/null ) &
-            local watcher=$!
-            wait "$child" 2>/dev/null && output=$(cat "$tmpfile")
-            kill "$watcher" 2>/dev/null
-            wait "$watcher" 2>/dev/null
-            rm -f "$tmpfile"
-        fi
+    local i
+    for i in "${!cli_types[@]}"; do
+        cli_type="${cli_types[$i]}"
+        local output
+        output=$(cat "${output_files[$i]}" 2>/dev/null)
+        rm -f "${output_files[$i]}"
 
         # Parse results
         local download="" upload="" ping_val=""
@@ -131,12 +149,20 @@ FOOTER
 
     # Display results
     local height=$(( ${#PROVIDERS[@]} + 12 ))
+    local tmpscript
+    tmpscript=$(mktemp)
+    cat > "$tmpscript" <<SCRIPT
+#!/usr/bin/env bash
+cat '$results_file'
+read -rsn1
+rm -f '$results_file' '$tmpscript'
+SCRIPT
+    chmod +x "$tmpscript"
+
     if supports_popup; then
-        tmux display-popup -E -w 60 -h "$height" \
-            "cat '$results_file'; read -rsn1; rm -f '$results_file'"
+        tmux display-popup -E -w 60 -h "$height" "$tmpscript"
     else
-        tmux split-window -v -l "$height" \
-            "cat '$results_file'; read -rsn1; rm -f '$results_file'"
+        tmux split-window -v -l "$height" "$tmpscript"
     fi
 }
 
