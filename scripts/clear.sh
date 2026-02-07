@@ -20,7 +20,11 @@ INTERVAL_LOCK="/tmp/tmux-speedtest-interval.lock"
 if [[ -f "$INTERVAL_LOCK" ]]; then
     RUNNER_PID=$(cat "$INTERVAL_LOCK" 2>/dev/null)
     if [[ "$RUNNER_PID" =~ ^[0-9]+$ ]] && kill -0 "$RUNNER_PID" 2>/dev/null; then
-        kill "$RUNNER_PID" 2>/dev/null
+        # Verify PID belongs to interval runner before killing (guards against PID reuse)
+        RUNNER_CMD=$(ps -p "$RUNNER_PID" -o args= 2>/dev/null || true)
+        if [[ "$RUNNER_CMD" == *"interval_runner.sh"* ]]; then
+            kill "$RUNNER_PID" 2>/dev/null
+        fi
     fi
     rm -f "$INTERVAL_LOCK"
 fi

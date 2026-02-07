@@ -5,12 +5,6 @@ source "$CURRENT_DIR/helpers.sh"
 
 INTERVAL_LOCK="/tmp/tmux-speedtest-interval.lock"
 
-# Clean up lock file on exit
-cleanup() {
-    rm -f "$INTERVAL_LOCK"
-}
-trap cleanup EXIT
-
 # Check if already running
 if [[ -f "$INTERVAL_LOCK" ]]; then
     local_pid=$(cat "$INTERVAL_LOCK" 2>/dev/null)
@@ -25,6 +19,12 @@ fi
 if ! (set -C; echo "${BASHPID:-$$}" > "$INTERVAL_LOCK") 2>/dev/null; then
     exit 0
 fi
+
+# Only install cleanup trap after successfully acquiring the lock
+cleanup() {
+    rm -f "$INTERVAL_LOCK"
+}
+trap cleanup EXIT
 
 # Main loop
 while true; do

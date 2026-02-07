@@ -21,6 +21,10 @@ run_speedtest_background() {
     fi
     trap 'release_lock' EXIT
 
+    if [[ "$(get_tmux_option "@speedtest_notifications" "on")" != "off" ]]; then
+        tmux display-message "speedtest: Starting..."
+    fi
+
     # Configuration
     FORMAT=$(get_tmux_option "@speedtest_format" "↓ #{download} ↑ #{upload} #{ping}")
     ICON_RUNNING=$(get_tmux_option "@speedtest_icon_running" "⏳")
@@ -225,7 +229,3 @@ run_speedtest_background() {
 # Launch in background and detach
 run_speedtest_background &
 disown
-
-if [[ "$(get_tmux_option "@speedtest_notifications" "on")" != "off" ]]; then
-    tmux display-message "speedtest: Starting..."
-fi
