@@ -17,6 +17,7 @@ fi
 
 # Reset the result option to the idle icon (or empty string)
 set_tmux_option "@speedtest_result" "$ICON_IDLE"
+set_tmux_option "@speedtest_last_run" "0"
 
 # Clear stored detail data
 set_tmux_option "@speedtest_result_json" ""

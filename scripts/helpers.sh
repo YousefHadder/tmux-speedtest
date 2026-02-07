@@ -50,29 +50,30 @@ identify_speedtest_type() {
 
 # Find the Ookla speedtest binary (checking common locations)
 find_ookla_binary() {
-    # Check Homebrew opt path first (handles shadowing by Python version)
-    local brew_path="/opt/homebrew/opt/speedtest/bin/speedtest"
-    if [[ -x "$brew_path" ]]; then
-        local type
-        type=$(identify_speedtest_type "$brew_path")
-        if [[ "$type" == "ookla" ]]; then
-            echo "$brew_path"
-            return
-        fi
-    fi
+    local paths=(
+        "/opt/homebrew/opt/speedtest/bin/speedtest"                     # macOS ARM Homebrew
+        "/usr/local/opt/speedtest/bin/speedtest"                        # macOS Intel Homebrew
+        "$HOME/.linuxbrew/opt/speedtest/bin/speedtest"                  # Linuxbrew user
+        "/home/linuxbrew/.linuxbrew/opt/speedtest/bin/speedtest"        # Linuxbrew system
+        "/usr/bin/speedtest"                                            # Linux system package
+        "/usr/local/bin/speedtest"                                      # Linux local install
+        "/snap/bin/speedtest"                                           # Ubuntu Snap
+        "/usr/sbin/speedtest"                                           # Linux sbin
+    )
 
-    # Check Intel Homebrew path
-    local brew_intel_path="/usr/local/opt/speedtest/bin/speedtest"
-    if [[ -x "$brew_intel_path" ]]; then
-        local type
-        type=$(identify_speedtest_type "$brew_intel_path")
-        if [[ "$type" == "ookla" ]]; then
-            echo "$brew_intel_path"
-            return
+    local path
+    for path in "${paths[@]}"; do
+        if [[ -x "$path" ]]; then
+            local type
+            type=$(identify_speedtest_type "$path")
+            if [[ "$type" == "ookla" ]]; then
+                echo "$path"
+                return
+            fi
         fi
-    fi
+    done
 
-    # Check if speedtest in PATH is Ookla
+    # PATH fallback
     if command -v speedtest &>/dev/null; then
         local type
         type=$(identify_speedtest_type speedtest)
@@ -87,6 +88,23 @@ find_ookla_binary() {
 
 # Find the sivel speedtest-cli binary
 find_sivel_binary() {
+    local paths=(
+        "$HOME/.linuxbrew/bin/speedtest-cli"                            # Linuxbrew user
+        "/home/linuxbrew/.linuxbrew/bin/speedtest-cli"                  # Linuxbrew system
+        "/usr/bin/speedtest-cli"                                        # Linux system package
+        "/usr/local/bin/speedtest-cli"                                  # pip system install
+        "$HOME/.local/bin/speedtest-cli"                                # pip --user install
+    )
+
+    local path
+    for path in "${paths[@]}"; do
+        if [[ -x "$path" ]]; then
+            echo "$path"
+            return
+        fi
+    done
+
+    # PATH fallback
     if command -v speedtest-cli &>/dev/null; then
         echo "speedtest-cli"
         return
@@ -107,6 +125,22 @@ find_sivel_binary() {
 
 # Find the fast-cli binary (Netflix fast.com)
 find_fast_binary() {
+    local paths=(
+        "/opt/homebrew/bin/fast"                                        # Homebrew ARM64
+        "$HOME/.npm-global/bin/fast"                                    # npm custom prefix
+        "$HOME/.local/bin/fast"                                         # some npm configs
+        "/usr/local/bin/fast"                                           # system npm install
+    )
+
+    local path
+    for path in "${paths[@]}"; do
+        if [[ -x "$path" ]]; then
+            echo "$path"
+            return
+        fi
+    done
+
+    # PATH fallback
     if command -v fast &>/dev/null; then
         echo "fast"
         return
@@ -117,6 +151,23 @@ find_fast_binary() {
 
 # Find the Cloudflare speedtest CLI binary
 find_cloudflare_binary() {
+    local paths=(
+        "$HOME/.cargo/bin/cloudflare-speed-cli"                         # Cargo user install
+        "$HOME/.linuxbrew/bin/cloudflare-speed-cli"                     # Linuxbrew user
+        "/home/linuxbrew/.linuxbrew/bin/cloudflare-speed-cli"           # Linuxbrew system
+        "/usr/local/bin/cloudflare-speed-cli"                           # manual install
+        "/opt/homebrew/bin/cloudflare-speed-cli"                        # macOS Homebrew
+    )
+
+    local path
+    for path in "${paths[@]}"; do
+        if [[ -x "$path" ]]; then
+            echo "$path"
+            return
+        fi
+    done
+
+    # PATH fallback
     if command -v cloudflare-speed-cli &>/dev/null; then
         echo "cloudflare-speed-cli"
         return
@@ -271,6 +322,14 @@ extract_json_field() {
     fi
 
     echo ""
+# Detect if jq is available for JSON parsing
+# Returns: "jq" if available, "grep" otherwise
+detect_json_parser() {
+    if command -v jq &>/dev/null; then
+        echo "jq"
+    else
+        echo "grep"
+    fi
 }
 
 # Format speed with auto-scaling (bps to Mbps/Gbps)
@@ -343,6 +402,108 @@ build_result_string() {
     echo "$result"
 }
 
+# --- Color helpers ---
+
+# Wrap text in tmux color formatting
+# Usage: colorize_text <text> <fg_color>
+colorize_text() {
+    local text="$1"
+    local color="$2"
+
+    if [[ -z "$color" || "$color" == "none" ]]; then
+        echo "$text"
+    else
+        echo "#[fg=${color}]${text}#[fg=default]"
+    fi
+}
+
+# Determine color for a speed value (higher is better)
+# Usage: get_speed_color <mbps_numeric> <good_threshold> <bad_threshold>
+# Returns: color name from good/warn/bad config
+get_speed_color() {
+    local mbps="$1"
+    local good_threshold="$2"
+    local bad_threshold="$3"
+    local color_good="$4"
+    local color_warn="$5"
+    local color_bad="$6"
+
+    if [[ -z "$mbps" || "$mbps" == "?" || ! "$mbps" =~ ^[0-9]*\.?[0-9]+$ ]]; then
+        echo "none"
+        return
+    fi
+
+    if (( $(echo "$mbps >= $good_threshold" | bc -l) )); then
+        echo "$color_good"
+    elif (( $(echo "$mbps >= $bad_threshold" | bc -l) )); then
+        echo "$color_warn"
+    else
+        echo "$color_bad"
+    fi
+}
+
+# Determine color for a ping value (lower is better)
+# Usage: get_ping_color <ms_numeric> <good_threshold> <bad_threshold>
+get_ping_color() {
+    local ms="$1"
+    local good_threshold="$2"
+    local bad_threshold="$3"
+    local color_good="$4"
+    local color_warn="$5"
+    local color_bad="$6"
+
+    if [[ -z "$ms" || "$ms" == "?" || ! "$ms" =~ ^[0-9]*\.?[0-9]+$ ]]; then
+        echo "none"
+        return
+    fi
+
+    if (( $(echo "$ms <= $good_threshold" | bc -l) )); then
+        echo "$color_good"
+    elif (( $(echo "$ms <= $bad_threshold" | bc -l) )); then
+        echo "$color_warn"
+    else
+        echo "$color_bad"
+    fi
+}
+
+# Convert formatted speed string back to Mbps numeric value for threshold comparison
+# Input: "250 Mbps" or "1.50 Gbps" or "?"
+# Output: numeric Mbps value or empty
+speed_to_mbps() {
+    local formatted="$1"
+
+    if [[ "$formatted" == "?" ]]; then
+        echo ""
+        return
+    fi
+
+    if [[ "$formatted" =~ ([0-9.]+)[[:space:]]*Gbps ]]; then
+        echo "${BASH_REMATCH[1]} * 1000" | bc
+    elif [[ "$formatted" =~ ([0-9.]+)[[:space:]]*Mbps ]]; then
+        echo "${BASH_REMATCH[1]}"
+    else
+        echo ""
+    fi
+}
+
+# Convert formatted ping string back to numeric ms value
+# Input: "15ms" or "?"
+# Output: numeric ms value or empty
+ping_to_ms() {
+    local formatted="$1"
+
+    if [[ "$formatted" == "?" ]]; then
+        echo ""
+        return
+    fi
+
+    if [[ "$formatted" =~ ([0-9.]+)ms ]]; then
+        echo "${BASH_REMATCH[1]}"
+    else
+        echo ""
+    fi
+}
+
 # --- Lock file management ---
 
 LOCK_FILE="/tmp/tmux-speedtest.lock"
@@ -399,4 +560,80 @@ acquire_lock() {
 # Remove lock file
 release_lock() {
     rm -f "$LOCK_FILE"
+}
+
+# --- Time and expiry helpers ---
+
+# Parse human-friendly time string to seconds
+# Supports: 30s, 5m, 1h, 2d, combinations like 1h30m
+# Special values: 0, off, disabled return 0
+parse_time_to_seconds() {
+    local time_str="$1"
+
+    if [[ -z "$time_str" || "$time_str" == "0" || "$time_str" == "off" || "$time_str" == "disabled" ]]; then
+        echo "0"
+        return
+    fi
+
+    # If it's just a plain number, treat as seconds
+    if [[ "$time_str" =~ ^[0-9]+$ ]]; then
+        echo "$time_str"
+        return
+    fi
+
+    local total=0
+    while [[ "$time_str" =~ ([0-9]+)([smhd]) ]]; do
+        local value="${BASH_REMATCH[1]}"
+        local unit="${BASH_REMATCH[2]}"
+
+        case "$unit" in
+            s) total=$((total + value)) ;;
+            m) total=$((total + value * 60)) ;;
+            h) total=$((total + value * 3600)) ;;
+            d) total=$((total + value * 86400)) ;;
+        esac
+
+        # Remove matched portion to continue parsing
+        time_str="${time_str/${BASH_REMATCH[0]}/}"
+    done
+
+    echo "$total"
+}
+
+# Get current Unix timestamp
+get_current_timestamp() {
+    date +%s
+}
+
+# Check if speedtest result has expired
+# Returns 0 (true) if expired, 1 (false) if still valid
+is_result_expired() {
+    local expire_option
+    expire_option=$(get_tmux_option "@speedtest_expire" "0")
+
+    local expire_seconds
+    expire_seconds=$(parse_time_to_seconds "$expire_option")
+
+    # Expiry disabled
+    if [[ "$expire_seconds" -eq 0 ]]; then
+        return 1
+    fi
+
+    local last_run
+    last_run=$(get_tmux_option "@speedtest_last_run" "0")
+
+    # No test has been run
+    if [[ "$last_run" == "0" || -z "$last_run" ]]; then
+        return 1
+    fi
+
+    local current_time age
+    current_time=$(get_current_timestamp)
+    age=$((current_time - last_run))
+
+    if [[ "$age" -ge "$expire_seconds" ]]; then
+        return 0
+    else
+        return 1
+    fi
 }
