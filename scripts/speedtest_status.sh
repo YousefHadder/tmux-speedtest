@@ -9,6 +9,13 @@ source "$CURRENT_DIR/helpers.sh"
 ICON_IDLE=$(get_tmux_option "@speedtest_icon_idle" "—")
 RESULT=$(get_tmux_option "@speedtest_result" "")
 
+# Check if result has expired
+if [[ -n "$RESULT" && "$RESULT" != "$ICON_IDLE" ]] && is_result_expired; then
+    set_tmux_option "@speedtest_result" "$ICON_IDLE"
+    set_tmux_option "@speedtest_last_run" "0"
+    RESULT="$ICON_IDLE"
+fi
+
 # If result is empty, check if we should show idle icon
 if [[ -z "$RESULT" ]]; then
     # If idle icon is not empty, show it (persistent mode)

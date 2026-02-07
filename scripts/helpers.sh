@@ -484,3 +484,79 @@ acquire_lock() {
 release_lock() {
     rm -f "$LOCK_FILE"
 }
+
+# --- Time and expiry helpers ---
+
+# Parse human-friendly time string to seconds
+# Supports: 30s, 5m, 1h, 2d, combinations like 1h30m
+# Special values: 0, off, disabled return 0
+parse_time_to_seconds() {
+    local time_str="$1"
+
+    if [[ -z "$time_str" || "$time_str" == "0" || "$time_str" == "off" || "$time_str" == "disabled" ]]; then
+        echo "0"
+        return
+    fi
+
+    # If it's just a plain number, treat as seconds
+    if [[ "$time_str" =~ ^[0-9]+$ ]]; then
+        echo "$time_str"
+        return
+    fi
+
+    local total=0
+    while [[ "$time_str" =~ ([0-9]+)([smhd]) ]]; do
+        local value="${BASH_REMATCH[1]}"
+        local unit="${BASH_REMATCH[2]}"
+
+        case "$unit" in
+            s) total=$((total + value)) ;;
+            m) total=$((total + value * 60)) ;;
+            h) total=$((total + value * 3600)) ;;
+            d) total=$((total + value * 86400)) ;;
+        esac
+
+        # Remove matched portion to continue parsing
+        time_str="${time_str/${BASH_REMATCH[0]}/}"
+    done
+
+    echo "$total"
+}
+
+# Get current Unix timestamp
+get_current_timestamp() {
+    date +%s
+}
+
+# Check if speedtest result has expired
+# Returns 0 (true) if expired, 1 (false) if still valid
+is_result_expired() {
+    local expire_option
+    expire_option=$(get_tmux_option "@speedtest_expire" "0")
+
+    local expire_seconds
+    expire_seconds=$(parse_time_to_seconds "$expire_option")
+
+    # Expiry disabled
+    if [[ "$expire_seconds" -eq 0 ]]; then
+        return 1
+    fi
+
+    local last_run
+    last_run=$(get_tmux_option "@speedtest_last_run" "0")
+
+    # No test has been run
+    if [[ "$last_run" == "0" || -z "$last_run" ]]; then
+        return 1
+    fi
+
+    local current_time age
+    current_time=$(get_current_timestamp)
+    age=$((current_time - last_run))
+
+    if [[ "$age" -ge "$expire_seconds" ]]; then
+        return 0
+    else
+        return 1
+    fi
+}
