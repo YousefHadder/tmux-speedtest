@@ -290,8 +290,8 @@ extract_json_field() {
     # Try jq first
     if command -v jq &>/dev/null; then
         local val
-        val=$(echo "$json" | jq -r "$jq_path" 2>/dev/null)
-        if [[ -n "$val" && "$val" != "null" ]]; then
+        val=$(echo "$json" | jq -re "$jq_path" 2>/dev/null)
+        if [[ $? -eq 0 && "$val" != "null" ]]; then
             echo "$val"
             return
         fi
@@ -316,6 +316,36 @@ detect_json_parser() {
     fi
 }
 
+# Evaluate arithmetic expression (bc with awk fallback)
+# Supports bc "scale=N;" syntax. Returns empty + exit 1 on failure.
+calc() {
+    local expr="$1"
+    local result
+
+    if command -v bc &>/dev/null; then
+        result=$(echo "$expr" | bc 2>/dev/null)
+    else
+        local awk_expr="$expr"
+        local scale=""
+        if [[ "$awk_expr" =~ ^scale=([0-9]+)\;[[:space:]]*(.*) ]]; then
+            scale="${BASH_REMATCH[1]}"
+            awk_expr="${BASH_REMATCH[2]}"
+        fi
+        if [[ "$scale" == "0" ]]; then
+            result=$(awk "BEGIN {print int($awk_expr)}" 2>/dev/null)
+        elif [[ -n "$scale" ]]; then
+            result=$(awk "BEGIN {printf \"%.${scale}f\", $awk_expr}" 2>/dev/null)
+        else
+            result=$(awk "BEGIN {print $awk_expr}" 2>/dev/null)
+        fi
+    fi
+
+    if [[ -z "$result" ]]; then
+        return 1
+    fi
+    echo "$result"
+}
+
 # Format speed with auto-scaling (bps to Mbps/Gbps)
 # Input: speed in bits per second (for sivel), bytes per second (for ookla), or Mbps (for fast)
 # Usage: format_speed <value> <source: ookla|sivel|fast>
@@ -332,26 +362,24 @@ format_speed() {
     # Convert to Mbps based on source
     if [[ "$source" == "ookla" ]]; then
         # Ookla reports in bytes per second, convert to Mbps
-        mbps=$(echo "scale=2; $value * 8 / 1000000" | bc)
+        mbps=$(calc "scale=2; $value * 8 / 1000000") || { echo "?"; return; }
     elif [[ "$source" == "fast" || "$source" == "cloudflare" ]]; then
         # fast-cli and cloudflare-speed-cli report directly in Mbps
         mbps="$value"
     else
         # sivel reports in bits per second, convert to Mbps
-        mbps=$(echo "scale=2; $value / 1000000" | bc)
+        mbps=$(calc "scale=2; $value / 1000000") || { echo "?"; return; }
     fi
 
     # Auto-scale to Gbps if >= 1000 Mbps
-    local gbps
-    gbps=$(echo "$mbps >= 1000" | bc)
-    if [[ "$gbps" -eq 1 ]]; then
+    if [[ "$(calc "$mbps >= 1000")" == "1" ]]; then
         local formatted
-        formatted=$(echo "scale=2; $mbps / 1000" | bc)
+        formatted=$(calc "scale=2; $mbps / 1000") || { echo "?"; return; }
         echo "${formatted} Gbps"
     else
         # Round to integer for cleaner display
         local rounded
-        rounded=$(echo "scale=0; ($mbps + 0.5) / 1" | bc)
+        rounded=$(calc "scale=0; ($mbps + 0.5) / 1") || { echo "?"; return; }
         echo "${rounded} Mbps"
     fi
 }
@@ -366,7 +394,7 @@ format_ping() {
     fi
 
     local rounded
-    rounded=$(echo "scale=0; ($value + 0.5) / 1" | bc)
+    rounded=$(calc "scale=0; ($value + 0.5) / 1") || { echo "?"; return; }
     echo "${rounded}ms"
 }
 
@@ -417,9 +445,9 @@ get_speed_color() {
         return
     fi
 
-    if (( $(echo "$mbps >= $good_threshold" | bc -l) )); then
+    if [[ "$(calc "$mbps >= $good_threshold")" == "1" ]]; then
         echo "$color_good"
-    elif (( $(echo "$mbps >= $bad_threshold" | bc -l) )); then
+    elif [[ "$(calc "$mbps >= $bad_threshold")" == "1" ]]; then
         echo "$color_warn"
     else
         echo "$color_bad"
@@ -441,9 +469,9 @@ get_ping_color() {
         return
     fi
 
-    if (( $(echo "$ms <= $good_threshold" | bc -l) )); then
+    if [[ "$(calc "$ms <= $good_threshold")" == "1" ]]; then
         echo "$color_good"
-    elif (( $(echo "$ms <= $bad_threshold" | bc -l) )); then
+    elif [[ "$(calc "$ms <= $bad_threshold")" == "1" ]]; then
         echo "$color_warn"
     else
         echo "$color_bad"
@@ -462,7 +490,12 @@ speed_to_mbps() {
     fi
 
     if [[ "$formatted" =~ ([0-9.]+)[[:space:]]*Gbps ]]; then
-        echo "${BASH_REMATCH[1]} * 1000" | bc
+        local result
+        if ! result=$(calc "${BASH_REMATCH[1]} * 1000"); then
+            echo ""
+        else
+            echo "$result"
+        fi
     elif [[ "$formatted" =~ ([0-9.]+)[[:space:]]*Mbps ]]; then
         echo "${BASH_REMATCH[1]}"
     else

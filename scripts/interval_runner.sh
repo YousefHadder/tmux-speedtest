@@ -36,6 +36,11 @@ while true; do
         exit 0
     fi
 
+    # Verify tmux server is still running (prevents zombie after tmux restart)
+    if ! tmux list-sessions &>/dev/null; then
+        exit 0
+    fi
+
     # Sleep first (avoids duplicating run_on_start trigger)
     sleep "$INTERVAL_SECONDS"
 

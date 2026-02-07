@@ -59,6 +59,15 @@ run_speedtest_background() {
     CLI_TYPE="${CLI_RESULT%%:*}"
     CLI_CMD="${CLI_RESULT#*:}"
 
+    # Warn if explicit provider wasn't found and fallback was used
+    local requested_provider
+    requested_provider=$(get_tmux_option "@speedtest_provider" "auto")
+    if [[ "$requested_provider" != "auto" && "$CLI_TYPE" != "$requested_provider" ]]; then
+        if [[ "$(get_tmux_option "@speedtest_notifications" "on")" != "off" ]]; then
+            tmux display-message "speedtest: '$requested_provider' not found, using $CLI_TYPE instead"
+        fi
+    fi
+
     # Timeout for CLI execution (prevents hung tests)
     TIMEOUT_SECS=$(get_tmux_option "@speedtest_timeout" "120")
     if ! [[ "$TIMEOUT_SECS" =~ ^[0-9]+$ ]]; then
@@ -94,6 +103,7 @@ run_speedtest_background() {
     else
         local tmpfile
         tmpfile=$(mktemp)
+        trap 'rm -f "$tmpfile"; release_lock' EXIT
         "${cmd[@]}" > "$tmpfile" 2>/dev/null &
         local child=$!
         ( sleep "$TIMEOUT_SECS" && kill "$child" 2>/dev/null ) &
