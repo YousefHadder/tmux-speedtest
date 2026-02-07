@@ -50,9 +50,9 @@ parse_and_display() {
             download=$(extract_json_field "$json" '.download' '"download":\s*[0-9.]+')
             upload=$(extract_json_field "$json" '.upload' '"upload":\s*[0-9.]+')
             ping_val=$(extract_json_field "$json" '.ping' '"ping":\s*[0-9.]+')
-            server_name=$(extract_json_field "$json" '.server.name' '')
-            isp=$(extract_json_field "$json" '.client.isp' '')
-            external_ip=$(extract_json_field "$json" '.client.ip' '')
+            server_name=$(extract_json_field "$json" '.server.name' '"name":\s*"[^"]*"')
+            isp=$(extract_json_field "$json" '.client.isp' '"isp":\s*"[^"]*"')
+            external_ip=$(extract_json_field "$json" '.client.ip' '"ip":\s*"[^"]*"')
             ;;
     esac
 
