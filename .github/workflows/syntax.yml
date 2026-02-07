@@ -1,0 +1,42 @@
+name: Bash Syntax Check
+
+on:
+  push:
+    branches: [main]
+    paths-ignore:
+      - "**.md"
+      - "**.png"
+      - "**.jpg"
+      - "**.gif"
+  pull_request:
+    paths-ignore:
+      - "**.md"
+      - "**.png"
+      - "**.jpg"
+      - "**.gif"
+  workflow_dispatch:
+
+concurrency:
+  group: ${{ github.workflow }}-${{ github.ref }}
+  cancel-in-progress: true
+
+jobs:
+  syntax-check:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout repository
+        uses: actions/checkout@v4
+
+      - name: Check bash syntax
+        run: |
+          set -e
+          echo "Checking speedtest.tmux..."
+          bash -n speedtest.tmux
+
+          echo "Checking scripts/*.sh..."
+          for script in scripts/*.sh; do
+            echo "  - $script"
+            bash -n "$script"
+          done
+
+          echo "All scripts have valid bash syntax"
