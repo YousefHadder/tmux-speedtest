@@ -290,7 +290,7 @@ get_speed_color() {
     local color_warn="$5"
     local color_bad="$6"
 
-    if [[ -z "$mbps" || "$mbps" == "?" ]]; then
+    if [[ -z "$mbps" || "$mbps" == "?" || ! "$mbps" =~ ^[0-9]*\.?[0-9]+$ ]]; then
         echo "none"
         return
     fi
@@ -314,7 +314,7 @@ get_ping_color() {
     local color_warn="$5"
     local color_bad="$6"
 
-    if [[ -z "$ms" || "$ms" == "?" ]]; then
+    if [[ -z "$ms" || "$ms" == "?" || ! "$ms" =~ ^[0-9]*\.?[0-9]+$ ]]; then
         echo "none"
         return
     fi

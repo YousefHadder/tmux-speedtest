@@ -176,14 +176,14 @@ run_speedtest_background() {
         ul_mbps=$(speed_to_mbps "$UPLOAD_FMT")
         ping_ms=$(ping_to_ms "$PING_FMT")
 
-        local dl_color ul_color pg_color
+        local dl_color ul_color ping_color
         dl_color=$(get_speed_color "$dl_mbps" "$speed_good" "$speed_bad" "$color_good" "$color_warn" "$color_bad")
         ul_color=$(get_speed_color "$ul_mbps" "$speed_good" "$speed_bad" "$color_good" "$color_warn" "$color_bad")
-        pg_color=$(get_ping_color "$ping_ms" "$ping_good" "$ping_bad" "$color_good" "$color_warn" "$color_bad")
+        ping_color=$(get_ping_color "$ping_ms" "$ping_good" "$ping_bad" "$color_good" "$color_warn" "$color_bad")
 
         DOWNLOAD_FMT=$(colorize_text "$DOWNLOAD_FMT" "$dl_color")
         UPLOAD_FMT=$(colorize_text "$UPLOAD_FMT" "$ul_color")
-        PING_FMT=$(colorize_text "$PING_FMT" "$pg_color")
+        PING_FMT=$(colorize_text "$PING_FMT" "$ping_color")
     fi
 
     # Build result string
