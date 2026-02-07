@@ -7,10 +7,14 @@ source "$CURRENT_DIR/scripts/helpers.sh"
 # Get user configuration
 KEY=$(get_tmux_option "@speedtest_key" "o")
 CLEAR_KEY=$(get_tmux_option "@speedtest_clear_key" "O")
+DETAIL_KEY=$(get_tmux_option "@speedtest_detail_key" "I")
+COMPARE_KEY=$(get_tmux_option "@speedtest_compare_key" "C")
 
 # Set up key binding (use -b for background/non-blocking execution)
 tmux bind-key "$KEY" run-shell -b "$CURRENT_DIR/scripts/speedtest.sh"
 tmux bind-key "$CLEAR_KEY" run-shell -b "$CURRENT_DIR/scripts/clear.sh"
+tmux bind-key "$DETAIL_KEY" run-shell -b "$CURRENT_DIR/scripts/popup_detail.sh"
+tmux bind-key "$COMPARE_KEY" run-shell -b "$CURRENT_DIR/scripts/compare_providers.sh"
 
 # Set up status bar interpolation
 # This allows users to use #{speedtest_result} in their status bar
