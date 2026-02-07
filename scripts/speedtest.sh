@@ -54,39 +54,44 @@ run_speedtest_background() {
 
     # Timeout for CLI execution (prevents hung tests)
     TIMEOUT_SECS=$(get_tmux_option "@speedtest_timeout" "120")
+    if ! [[ "$TIMEOUT_SECS" =~ ^[0-9]+$ ]]; then
+        TIMEOUT_SECS=120
+    fi
 
     # Run speedtest based on CLI type
-    local cmd
+    local cmd=()
     if [[ "$CLI_TYPE" == "ookla" ]]; then
-        cmd="\"$CLI_CMD\" --format=json --accept-license --accept-gdpr"
+        cmd=( "$CLI_CMD" --format=json --accept-license --accept-gdpr )
         if [[ -n "$SERVER" ]]; then
-            cmd="$cmd --server-id=$SERVER"
+            cmd+=( --server-id="$SERVER" )
         fi
     elif [[ "$CLI_TYPE" == "fast" ]]; then
         # fast-cli (Netflix fast.com)
-        cmd="\"$CLI_CMD\" --json --upload"
+        cmd=( "$CLI_CMD" --json --upload )
     elif [[ "$CLI_TYPE" == "cloudflare" ]]; then
         # cloudflare-speed-cli
-        cmd="\"$CLI_CMD\" --json"
+        cmd=( "$CLI_CMD" --json )
     else
         # sivel speedtest-cli
-        cmd="\"$CLI_CMD\" --json"
+        cmd=( "$CLI_CMD" --json )
         if [[ -n "$SERVER" ]]; then
-            cmd="$cmd --server=$SERVER"
+            cmd+=( --server="$SERVER" )
         fi
     fi
 
     # Execute with timeout — try coreutils timeout first, fall back to bg+sleep+kill
     if command -v timeout &>/dev/null; then
-        OUTPUT=$(eval "timeout $TIMEOUT_SECS $cmd" 2>/dev/null)
+        OUTPUT=$(timeout "$TIMEOUT_SECS" "${cmd[@]}" 2>/dev/null)
     else
         local tmpfile
         tmpfile=$(mktemp)
-        eval "$cmd" > "$tmpfile" 2>/dev/null &
+        "${cmd[@]}" > "$tmpfile" 2>/dev/null &
         local child=$!
         ( sleep "$TIMEOUT_SECS" && kill "$child" 2>/dev/null ) &
         local watcher=$!
-        if wait "$child" 2>/dev/null; then
+        wait "$child" 2>/dev/null
+        local child_exit=$?
+        if [[ $child_exit -eq 0 ]]; then
             OUTPUT=$(cat "$tmpfile")
         else
             OUTPUT=""

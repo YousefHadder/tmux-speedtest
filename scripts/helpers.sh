@@ -314,7 +314,7 @@ is_lock_stale() {
 
 # Write current PID to lock file
 acquire_lock() {
-    echo $$ > "$LOCK_FILE"
+    echo "${BASHPID:-$$}" > "$LOCK_FILE"
 }
 
 # Remove lock file
