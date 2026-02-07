@@ -206,6 +206,11 @@ run_speedtest_background() {
     set_tmux_option "@speedtest_last_run" "$(get_current_timestamp)"
     tmux refresh-client -S
 
+    # Store full results for detail popup
+    set_tmux_option "@speedtest_result_json" "$OUTPUT"
+    set_tmux_option "@speedtest_result_timestamp" "$(date +%s)"
+    set_tmux_option "@speedtest_result_provider" "$CLI_TYPE"
+
     # Show notification if not disabled
     if [[ "$(get_tmux_option "@speedtest_notifications" "on")" != "off" ]]; then
         tmux display-message "speedtest: Done - $RESULT"

@@ -245,6 +245,85 @@ detect_speedtest_cli() {
     echo "none"
 }
 
+# Get tmux major.minor version as comparable integer (e.g., 3.2 -> 302)
+get_tmux_version() {
+    local version_string
+    version_string=$(tmux -V 2>/dev/null | grep -oE '[0-9]+\.[0-9]+')
+    if [[ -z "$version_string" ]]; then
+        echo "0"
+        return
+    fi
+    local major minor
+    major=$(echo "$version_string" | cut -d. -f1)
+    minor=$(echo "$version_string" | cut -d. -f2)
+    echo "$((major * 100 + minor))"
+}
+
+# Check if tmux supports display-popup (requires 3.2+)
+supports_popup() {
+    local version
+    version=$(get_tmux_version)
+    [[ "$version" -ge 302 ]]
+}
+
+# Detect all available speedtest CLIs
+# Outputs one "type:command" per line
+detect_all_speedtest_clis() {
+    local ookla_cmd cf_cmd fast_cmd sivel_cmd
+
+    ookla_cmd=$(find_ookla_binary)
+    [[ -n "$ookla_cmd" ]] && echo "ookla:$ookla_cmd"
+
+    cf_cmd=$(find_cloudflare_binary)
+    [[ -n "$cf_cmd" ]] && echo "cloudflare:$cf_cmd"
+
+    fast_cmd=$(find_fast_binary)
+    [[ -n "$fast_cmd" ]] && echo "fast:$fast_cmd"
+
+    sivel_cmd=$(find_sivel_binary)
+    [[ -n "$sivel_cmd" ]] && echo "sivel:$sivel_cmd"
+}
+
+# Format a timestamp for display (cross-platform)
+format_timestamp() {
+    local ts="$1"
+    if [[ -z "$ts" || "$ts" == "0" ]]; then
+        echo "N/A"
+        return
+    fi
+    # macOS uses -r, Linux uses -d @
+    if date -r "$ts" "+%Y-%m-%d %H:%M:%S" 2>/dev/null; then
+        return
+    fi
+    date -d "@$ts" "+%Y-%m-%d %H:%M:%S" 2>/dev/null || echo "N/A"
+}
+
+# Extract a field from JSON using jq or grep
+# Usage: extract_json_field <json> <jq_path> <grep_pattern>
+extract_json_field() {
+    local json="$1"
+    local jq_path="$2"
+    local grep_pattern="$3"
+
+    # Try jq first
+    if command -v jq &>/dev/null; then
+        local val
+        val=$(echo "$json" | jq -r "$jq_path" 2>/dev/null)
+        if [[ -n "$val" && "$val" != "null" ]]; then
+            echo "$val"
+            return
+        fi
+    fi
+
+    # Fallback to grep
+    if [[ -n "$grep_pattern" ]]; then
+        echo "$json" | grep -oE "$grep_pattern" | head -1 | grep -oE '[^:]+$' | tr -d '", '
+        return
+    fi
+
+    echo ""
+}
+
 # Detect if jq is available for JSON parsing
 # Returns: "jq" if available, "grep" otherwise
 detect_json_parser() {
