@@ -245,6 +245,16 @@ detect_speedtest_cli() {
     echo "none"
 }
 
+# Detect if jq is available for JSON parsing
+# Returns: "jq" if available, "grep" otherwise
+detect_json_parser() {
+    if command -v jq &>/dev/null; then
+        echo "jq"
+    else
+        echo "grep"
+    fi
+}
+
 # Format speed with auto-scaling (bps to Mbps/Gbps)
 # Input: speed in bits per second (for sivel), bytes per second (for ookla), or Mbps (for fast)
 # Usage: format_speed <value> <source: ookla|sivel|fast>
