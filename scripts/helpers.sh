@@ -490,7 +490,12 @@ speed_to_mbps() {
     fi
 
     if [[ "$formatted" =~ ([0-9.]+)[[:space:]]*Gbps ]]; then
-        calc "${BASH_REMATCH[1]} * 1000"
+        local result
+        if ! result=$(calc "${BASH_REMATCH[1]} * 1000"); then
+            echo ""
+        else
+            echo "$result"
+        fi
     elif [[ "$formatted" =~ ([0-9.]+)[[:space:]]*Mbps ]]; then
         echo "${BASH_REMATCH[1]}"
     else
