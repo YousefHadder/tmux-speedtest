@@ -17,9 +17,7 @@ tmux bind-key "$CLEAR_KEY" run-shell -b "$CURRENT_DIR/scripts/clear.sh"
 # Default to empty string so it doesn't show initially if auto-hide is desired
 tmux set-option -gq @speedtest_result "$(get_tmux_option "@speedtest_icon_idle" "—")"
 
-# Register the format interpolation
-# tmux will call the script whenever it needs to render #{speedtest_result}
-INTERPOLATION="#{speedtest_result}"
+# Set up status interpolation script path
 STATUS_SCRIPT="$CURRENT_DIR/scripts/speedtest_status.sh"
 
 # Update status-right and status-left to interpolate our variable
