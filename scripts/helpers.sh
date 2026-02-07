@@ -322,6 +322,8 @@ extract_json_field() {
     fi
 
     echo ""
+}
+
 # Detect if jq is available for JSON parsing
 # Returns: "jq" if available, "grep" otherwise
 detect_json_parser() {
