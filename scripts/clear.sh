@@ -15,6 +15,16 @@ if [[ -f "$LOCK_FILE" ]]; then
     release_lock
 fi
 
+# Stop interval runner if active
+INTERVAL_LOCK="/tmp/tmux-speedtest-interval.lock"
+if [[ -f "$INTERVAL_LOCK" ]]; then
+    RUNNER_PID=$(cat "$INTERVAL_LOCK" 2>/dev/null)
+    if [[ "$RUNNER_PID" =~ ^[0-9]+$ ]] && kill -0 "$RUNNER_PID" 2>/dev/null; then
+        kill "$RUNNER_PID" 2>/dev/null
+    fi
+    rm -f "$INTERVAL_LOCK"
+fi
+
 # Reset the result option to the idle icon (or empty string)
 set_tmux_option "@speedtest_result" "$ICON_IDLE"
 set_tmux_option "@speedtest_last_run" "0"

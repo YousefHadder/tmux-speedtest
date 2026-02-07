@@ -14,8 +14,11 @@ fi
 
 # Run the actual speedtest in background
 run_speedtest_background() {
-    # Write PID to lock file
-    acquire_lock
+    # Atomically acquire lock — exit if another process won the race
+    if ! acquire_lock; then
+        tmux display-message "speedtest: Already running..."
+        exit 0
+    fi
     trap 'release_lock' EXIT
 
     # Configuration
@@ -80,8 +83,10 @@ run_speedtest_background() {
     fi
 
     # Execute with timeout — try coreutils timeout first, fall back to bg+sleep+kill
+    local EXIT_CODE
     if command -v timeout &>/dev/null; then
         OUTPUT=$(timeout "$TIMEOUT_SECS" "${cmd[@]}" 2>/dev/null)
+        EXIT_CODE=$?
     else
         local tmpfile
         tmpfile=$(mktemp)
@@ -99,8 +104,8 @@ run_speedtest_background() {
         kill "$watcher" 2>/dev/null
         wait "$watcher" 2>/dev/null
         rm -f "$tmpfile"
+        EXIT_CODE=$child_exit
     fi
-    EXIT_CODE=$?
 
     if [[ $EXIT_CODE -ne 0 || -z "$OUTPUT" ]]; then
         tmux display-message "speedtest: Test failed"

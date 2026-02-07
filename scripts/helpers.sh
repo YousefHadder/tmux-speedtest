@@ -536,9 +536,13 @@ is_lock_stale() {
     return 1
 }
 
-# Write current PID to lock file
+# Atomically acquire lock file (fails if lock already exists)
+# Returns 0 on success, 1 if lock already held
 acquire_lock() {
-    echo "${BASHPID:-$$}" > "$LOCK_FILE"
+    if (set -C; echo "${BASHPID:-$$}" > "$LOCK_FILE") 2>/dev/null; then
+        return 0
+    fi
+    return 1
 }
 
 # Remove lock file

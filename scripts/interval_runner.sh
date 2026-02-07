@@ -17,10 +17,14 @@ if [[ -f "$INTERVAL_LOCK" ]]; then
     if [[ "$local_pid" =~ ^[0-9]+$ ]] && kill -0 "$local_pid" 2>/dev/null; then
         exit 0
     fi
+    # Stale lock from crashed runner — remove before re-acquiring
+    rm -f "$INTERVAL_LOCK"
 fi
 
-# Write our PID
-echo "${BASHPID:-$$}" > "$INTERVAL_LOCK"
+# Atomically write our PID (noclobber prevents race with another runner)
+if ! (set -C; echo "${BASHPID:-$$}" > "$INTERVAL_LOCK") 2>/dev/null; then
+    exit 0
+fi
 
 # Main loop
 while true; do
