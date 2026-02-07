@@ -263,3 +263,61 @@ build_result_string() {
 
     echo "$result"
 }
+
+# --- Lock file management ---
+
+LOCK_FILE="/tmp/tmux-speedtest.lock"
+LOCK_MAX_AGE=300
+
+# Get age of a file in seconds (cross-platform)
+file_age_seconds() {
+    local file="$1"
+    local mod_time
+    # macOS
+    mod_time=$(stat -f %m "$file" 2>/dev/null)
+    if [[ -z "$mod_time" ]]; then
+        # Linux
+        mod_time=$(stat -c %Y "$file" 2>/dev/null)
+    fi
+    if [[ -z "$mod_time" ]]; then
+        echo "0"
+        return
+    fi
+    echo $(( $(date +%s) - mod_time ))
+}
+
+# Check if the lock file is stale (dead PID, too old, or corrupt)
+# Returns 0 (true) if stale, 1 (false) if active
+is_lock_stale() {
+    local pid
+    pid=$(cat "$LOCK_FILE" 2>/dev/null)
+
+    # Corrupt or empty lock file
+    if ! [[ "$pid" =~ ^[0-9]+$ ]]; then
+        return 0
+    fi
+
+    # Lock file older than LOCK_MAX_AGE seconds (hung process)
+    local age
+    age=$(file_age_seconds "$LOCK_FILE")
+    if [[ "$age" -ge "$LOCK_MAX_AGE" ]]; then
+        return 0
+    fi
+
+    # PID no longer alive
+    if ! kill -0 "$pid" 2>/dev/null; then
+        return 0
+    fi
+
+    return 1
+}
+
+# Write current PID to lock file
+acquire_lock() {
+    echo "${BASHPID:-$$}" > "$LOCK_FILE"
+}
+
+# Remove lock file
+release_lock() {
+    rm -f "$LOCK_FILE"
+}
