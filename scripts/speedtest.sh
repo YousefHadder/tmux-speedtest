@@ -159,6 +159,33 @@ run_speedtest_background() {
     UPLOAD_FMT=$(format_speed "$upload" "$CLI_TYPE")
     PING_FMT=$(format_ping "$ping_val")
 
+    # Apply color coding if enabled
+    if [[ "$(get_tmux_option "@speedtest_colors" "off")" == "on" ]]; then
+        local speed_good speed_bad ping_good ping_bad
+        local color_good color_warn color_bad
+        speed_good=$(get_tmux_option "@speedtest_threshold_good" "100")
+        speed_bad=$(get_tmux_option "@speedtest_threshold_bad" "25")
+        ping_good=$(get_tmux_option "@speedtest_ping_threshold_good" "30")
+        ping_bad=$(get_tmux_option "@speedtest_ping_threshold_bad" "100")
+        color_good=$(get_tmux_option "@speedtest_color_good" "green")
+        color_warn=$(get_tmux_option "@speedtest_color_warn" "yellow")
+        color_bad=$(get_tmux_option "@speedtest_color_bad" "red")
+
+        local dl_mbps ul_mbps ping_ms
+        dl_mbps=$(speed_to_mbps "$DOWNLOAD_FMT")
+        ul_mbps=$(speed_to_mbps "$UPLOAD_FMT")
+        ping_ms=$(ping_to_ms "$PING_FMT")
+
+        local dl_color ul_color pg_color
+        dl_color=$(get_speed_color "$dl_mbps" "$speed_good" "$speed_bad" "$color_good" "$color_warn" "$color_bad")
+        ul_color=$(get_speed_color "$ul_mbps" "$speed_good" "$speed_bad" "$color_good" "$color_warn" "$color_bad")
+        pg_color=$(get_ping_color "$ping_ms" "$ping_good" "$ping_bad" "$color_good" "$color_warn" "$color_bad")
+
+        DOWNLOAD_FMT=$(colorize_text "$DOWNLOAD_FMT" "$dl_color")
+        UPLOAD_FMT=$(colorize_text "$UPLOAD_FMT" "$ul_color")
+        PING_FMT=$(colorize_text "$PING_FMT" "$pg_color")
+    fi
+
     # Build result string
     RESULT=$(build_result_string "$FORMAT" "$DOWNLOAD_FMT" "$UPLOAD_FMT" "$PING_FMT")
 
