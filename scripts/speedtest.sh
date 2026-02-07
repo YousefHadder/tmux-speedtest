@@ -164,6 +164,7 @@ run_speedtest_background() {
 
     # Update status bar
     set_tmux_option "@speedtest_result" "$RESULT"
+    set_tmux_option "@speedtest_last_run" "$(get_current_timestamp)"
     tmux refresh-client -S
 
     # Show notification if not disabled
