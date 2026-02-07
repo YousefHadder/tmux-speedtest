@@ -247,7 +247,7 @@ format_timestamp() {
     date -d "@$ts" "+%Y-%m-%d %H:%M:%S" 2>/dev/null || echo "N/A"
 }
 
-# Extract a field from JSON using jq, python, or grep
+# Extract a field from JSON using jq or grep
 # Usage: extract_json_field <json> <jq_path> <grep_pattern>
 extract_json_field() {
     local json="$1"

@@ -17,7 +17,10 @@ run_comparison() {
     trap 'release_lock' EXIT
 
     # Detect all available providers
-    mapfile -t PROVIDERS < <(detect_all_speedtest_clis)
+    local PROVIDERS=()
+    while IFS= read -r line; do
+        PROVIDERS+=("$line")
+    done < <(detect_all_speedtest_clis)
 
     if [[ ${#PROVIDERS[@]} -eq 0 ]]; then
         tmux display-message "speedtest: No CLI tools found"
@@ -84,7 +87,7 @@ HEADER
         fi
 
         # Parse results
-        local download="?" upload="?" ping_val="?"
+        local download="" upload="" ping_val=""
         if [[ -n "$output" ]]; then
             case "$cli_type" in
                 ookla)
@@ -98,9 +101,9 @@ HEADER
                     ping_val=$(extract_json_field "$output" '.latency' '"latency":\s*[0-9.]+')
                     ;;
                 cloudflare)
-                    download=$(extract_json_field "$output" '.download.mbps' '')
-                    upload=$(extract_json_field "$output" '.upload.mbps' '')
-                    ping_val=$(extract_json_field "$output" '.idle_latency.median_ms' '')
+                    download=$(extract_json_field "$output" '.download.mbps' '"mbps":\s*[0-9.]+')
+                    upload=$(extract_json_field "$output" '.upload.mbps' '"mbps":\s*[0-9.]+')
+                    ping_val=$(extract_json_field "$output" '.idle_latency.median_ms' '"median_ms":\s*[0-9.]+')
                     ;;
                 sivel|*)
                     download=$(extract_json_field "$output" '.download' '"download":\s*[0-9.]+')
@@ -122,7 +125,7 @@ HEADER
     cat >> "$results_file" <<FOOTER
 
   ==================================================
-  Press q to close
+  Press any key to close
 
 FOOTER
 

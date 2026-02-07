@@ -7,7 +7,7 @@ source "$CURRENT_DIR/scripts/helpers.sh"
 # Get user configuration
 KEY=$(get_tmux_option "@speedtest_key" "o")
 CLEAR_KEY=$(get_tmux_option "@speedtest_clear_key" "O")
-DETAIL_KEY=$(get_tmux_option "@speedtest_detail_key" "I")
+DETAIL_KEY=$(get_tmux_option "@speedtest_detail_key" "d")
 COMPARE_KEY=$(get_tmux_option "@speedtest_compare_key" "C")
 
 # Set up key binding (use -b for background/non-blocking execution)

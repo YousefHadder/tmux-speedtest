@@ -7,9 +7,10 @@ source "$CURRENT_DIR/helpers.sh"
 JSON=$(get_tmux_option "@speedtest_result_json" "")
 TIMESTAMP=$(get_tmux_option "@speedtest_result_timestamp" "")
 PROVIDER=$(get_tmux_option "@speedtest_result_provider" "")
+SPEEDTEST_KEY=$(get_tmux_option "@speedtest_key" "o")
 
 if [[ -z "$JSON" ]]; then
-    tmux display-message "speedtest: No results available. Run a test first (prefix + o)"
+    tmux display-message "speedtest: No results available. Run a test first (prefix + $SPEEDTEST_KEY)"
     exit 0
 fi
 
@@ -35,10 +36,10 @@ parse_and_display() {
             external_ip=$(extract_json_field "$json" '.interface.externalIp' '"externalIp":\s*"[^"]*"')
             ;;
         cloudflare)
-            download=$(extract_json_field "$json" '.download.mbps' '')
-            upload=$(extract_json_field "$json" '.upload.mbps' '')
-            ping_val=$(extract_json_field "$json" '.idle_latency.median_ms' '')
-            jitter=$(extract_json_field "$json" '.idle_latency.jitter_ms' '')
+            download=$(extract_json_field "$json" '.download.mbps' '"mbps":\s*[0-9.]+')
+            upload=$(extract_json_field "$json" '.upload.mbps' '"mbps":\s*[0-9.]+')
+            ping_val=$(extract_json_field "$json" '.idle_latency.median_ms' '"median_ms":\s*[0-9.]+')
+            jitter=$(extract_json_field "$json" '.idle_latency.jitter_ms' '"jitter_ms":\s*[0-9.]+')
             ;;
         fast)
             download=$(extract_json_field "$json" '.downloadSpeed' '"downloadSpeed":\s*[0-9.]+')
@@ -82,7 +83,7 @@ parse_and_display() {
     [[ -n "$isp" ]] && echo "  ISP:          $isp"
     [[ -n "$external_ip" ]] && echo "  External IP:  $external_ip"
     echo ""
-    echo "  Press q to close"
+    echo "  Press any key to close"
     echo ""
 }
 

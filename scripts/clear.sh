@@ -18,6 +18,11 @@ fi
 # Reset the result option to the idle icon (or empty string)
 set_tmux_option "@speedtest_result" "$ICON_IDLE"
 
+# Clear stored detail data
+set_tmux_option "@speedtest_result_json" ""
+set_tmux_option "@speedtest_result_timestamp" ""
+set_tmux_option "@speedtest_result_provider" ""
+
 # Refresh status line
 tmux refresh-client -S
 
