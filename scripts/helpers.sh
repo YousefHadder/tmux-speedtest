@@ -325,6 +325,108 @@ build_result_string() {
     echo "$result"
 }
 
+# --- Color helpers ---
+
+# Wrap text in tmux color formatting
+# Usage: colorize_text <text> <fg_color>
+colorize_text() {
+    local text="$1"
+    local color="$2"
+
+    if [[ -z "$color" || "$color" == "none" ]]; then
+        echo "$text"
+    else
+        echo "#[fg=${color}]${text}#[fg=default]"
+    fi
+}
+
+# Determine color for a speed value (higher is better)
+# Usage: get_speed_color <mbps_numeric> <good_threshold> <bad_threshold>
+# Returns: color name from good/warn/bad config
+get_speed_color() {
+    local mbps="$1"
+    local good_threshold="$2"
+    local bad_threshold="$3"
+    local color_good="$4"
+    local color_warn="$5"
+    local color_bad="$6"
+
+    if [[ -z "$mbps" || "$mbps" == "?" || ! "$mbps" =~ ^[0-9]*\.?[0-9]+$ ]]; then
+        echo "none"
+        return
+    fi
+
+    if (( $(echo "$mbps >= $good_threshold" | bc -l) )); then
+        echo "$color_good"
+    elif (( $(echo "$mbps >= $bad_threshold" | bc -l) )); then
+        echo "$color_warn"
+    else
+        echo "$color_bad"
+    fi
+}
+
+# Determine color for a ping value (lower is better)
+# Usage: get_ping_color <ms_numeric> <good_threshold> <bad_threshold>
+get_ping_color() {
+    local ms="$1"
+    local good_threshold="$2"
+    local bad_threshold="$3"
+    local color_good="$4"
+    local color_warn="$5"
+    local color_bad="$6"
+
+    if [[ -z "$ms" || "$ms" == "?" || ! "$ms" =~ ^[0-9]*\.?[0-9]+$ ]]; then
+        echo "none"
+        return
+    fi
+
+    if (( $(echo "$ms <= $good_threshold" | bc -l) )); then
+        echo "$color_good"
+    elif (( $(echo "$ms <= $bad_threshold" | bc -l) )); then
+        echo "$color_warn"
+    else
+        echo "$color_bad"
+    fi
+}
+
+# Convert formatted speed string back to Mbps numeric value for threshold comparison
+# Input: "250 Mbps" or "1.50 Gbps" or "?"
+# Output: numeric Mbps value or empty
+speed_to_mbps() {
+    local formatted="$1"
+
+    if [[ "$formatted" == "?" ]]; then
+        echo ""
+        return
+    fi
+
+    if [[ "$formatted" =~ ([0-9.]+)[[:space:]]*Gbps ]]; then
+        echo "${BASH_REMATCH[1]} * 1000" | bc
+    elif [[ "$formatted" =~ ([0-9.]+)[[:space:]]*Mbps ]]; then
+        echo "${BASH_REMATCH[1]}"
+    else
+        echo ""
+    fi
+}
+
+# Convert formatted ping string back to numeric ms value
+# Input: "15ms" or "?"
+# Output: numeric ms value or empty
+ping_to_ms() {
+    local formatted="$1"
+
+    if [[ "$formatted" == "?" ]]; then
+        echo ""
+        return
+    fi
+
+    if [[ "$formatted" =~ ([0-9.]+)ms ]]; then
+        echo "${BASH_REMATCH[1]}"
+    else
+        echo ""
+    fi
+}
+
 # --- Lock file management ---
 
 LOCK_FILE="/tmp/tmux-speedtest.lock"
