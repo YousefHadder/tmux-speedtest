@@ -4,23 +4,19 @@ CURRENT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
 source "$CURRENT_DIR/helpers.sh"
 
 # Check if already running (prevent multiple concurrent tests)
-LOCK_FILE="/tmp/tmux-speedtest.lock"
 if [[ -f "$LOCK_FILE" ]]; then
-    # Check if the process is still running
-    if kill -0 "$(cat "$LOCK_FILE")" 2>/dev/null; then
+    if ! is_lock_stale; then
         tmux display-message "speedtest: Already running..."
         exit 0
-    else
-        # Stale lock file, remove it
-        rm -f "$LOCK_FILE"
     fi
+    release_lock
 fi
 
 # Run the actual speedtest in background
 run_speedtest_background() {
     # Write PID to lock file
-    echo $$ > "$LOCK_FILE"
-    trap 'rm -f "$LOCK_FILE"' EXIT
+    acquire_lock
+    trap 'release_lock' EXIT
 
     # Configuration
     FORMAT=$(get_tmux_option "@speedtest_format" "↓ #{download} ↑ #{upload} #{ping}")
@@ -56,28 +52,48 @@ run_speedtest_background() {
     CLI_TYPE="${CLI_RESULT%%:*}"
     CLI_CMD="${CLI_RESULT#*:}"
 
+    # Timeout for CLI execution (prevents hung tests)
+    TIMEOUT_SECS=$(get_tmux_option "@speedtest_timeout" "120")
+
     # Run speedtest based on CLI type
+    local cmd
     if [[ "$CLI_TYPE" == "ookla" ]]; then
-        local cmd="\"$CLI_CMD\" --format=json --accept-license --accept-gdpr"
+        cmd="\"$CLI_CMD\" --format=json --accept-license --accept-gdpr"
         if [[ -n "$SERVER" ]]; then
             cmd="$cmd --server-id=$SERVER"
         fi
-        OUTPUT=$(eval "$cmd" 2>/dev/null)
     elif [[ "$CLI_TYPE" == "fast" ]]; then
         # fast-cli (Netflix fast.com)
-        local cmd="\"$CLI_CMD\" --json --upload"
-        OUTPUT=$(eval "$cmd" 2>/dev/null)
+        cmd="\"$CLI_CMD\" --json --upload"
     elif [[ "$CLI_TYPE" == "cloudflare" ]]; then
         # cloudflare-speed-cli
-        local cmd="\"$CLI_CMD\" --json"
-        OUTPUT=$(eval "$cmd" 2>/dev/null)
+        cmd="\"$CLI_CMD\" --json"
     else
         # sivel speedtest-cli
-        local cmd="\"$CLI_CMD\" --json"
+        cmd="\"$CLI_CMD\" --json"
         if [[ -n "$SERVER" ]]; then
             cmd="$cmd --server=$SERVER"
         fi
-        OUTPUT=$(eval "$cmd" 2>/dev/null)
+    fi
+
+    # Execute with timeout — try coreutils timeout first, fall back to bg+sleep+kill
+    if command -v timeout &>/dev/null; then
+        OUTPUT=$(eval "timeout $TIMEOUT_SECS $cmd" 2>/dev/null)
+    else
+        local tmpfile
+        tmpfile=$(mktemp)
+        eval "$cmd" > "$tmpfile" 2>/dev/null &
+        local child=$!
+        ( sleep "$TIMEOUT_SECS" && kill "$child" 2>/dev/null ) &
+        local watcher=$!
+        if wait "$child" 2>/dev/null; then
+            OUTPUT=$(cat "$tmpfile")
+        else
+            OUTPUT=""
+        fi
+        kill "$watcher" 2>/dev/null
+        wait "$watcher" 2>/dev/null
+        rm -f "$tmpfile"
     fi
     EXIT_CODE=$?
 
