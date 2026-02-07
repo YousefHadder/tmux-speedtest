@@ -89,10 +89,13 @@ parse_and_display() {
 
 # Generate content to a temp file (avoids quoting issues with special chars)
 TMPFILE=$(mktemp)
+TMPSCRIPT_EARLY=""
+trap 'rm -f "$TMPFILE" "$TMPSCRIPT_EARLY"' EXIT
 parse_and_display "$JSON" "$PROVIDER" "$TIMESTAMP" > "$TMPFILE"
 
 # Write a self-contained display script (avoids shell compatibility issues)
 TMPSCRIPT=$(mktemp)
+TMPSCRIPT_EARLY="$TMPSCRIPT"
 cat > "$TMPSCRIPT" <<SCRIPT
 #!/usr/bin/env bash
 cat '$TMPFILE'
