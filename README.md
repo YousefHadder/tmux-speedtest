@@ -186,7 +186,12 @@ Run tests automatically on a schedule:
 set -g @speedtest_run_on_start 'on'
 
 # Auto-run interval (default: 0, disabled)
-# Supports: seconds (e.g., 3600), minutes (e.g., 30m), hours (e.g., 1h)
+# Supports: plain seconds (e.g., 3600), or units:
+#   - seconds:  "30s"
+#   - minutes:  "30m"
+#   - hours:    "1h"
+#   - days:     "2d"
+# You can also combine units, e.g., "1h30m". Use "0", "off", or "disabled" to turn this off.
 set -g @speedtest_interval '30m'
 ```
 
@@ -198,11 +203,11 @@ Enable color-coded speeds and ping in the status bar based on configurable thres
 # Enable color coding (default: off)
 set -g @speedtest_colors 'on'
 
-# Speed thresholds in Mbps (values above good = green, below bad = red, between = yellow)
+# Speed thresholds in Mbps (values >= good = green, >= bad and < good = yellow, < bad = red)
 set -g @speedtest_threshold_good '100'
 set -g @speedtest_threshold_bad '25'
 
-# Ping thresholds in ms (values below good = green, above bad = red, between = yellow)
+# Ping thresholds in ms (values <= good = green, <= bad and > good = yellow, > bad = red)
 set -g @speedtest_ping_threshold_good '30'
 set -g @speedtest_ping_threshold_bad '100'
 
