@@ -266,24 +266,6 @@ supports_popup() {
     [[ "$version" -ge 302 ]]
 }
 
-# Detect all available speedtest CLIs
-# Outputs one "type:command" per line
-detect_all_speedtest_clis() {
-    local ookla_cmd cf_cmd fast_cmd sivel_cmd
-
-    ookla_cmd=$(find_ookla_binary)
-    [[ -n "$ookla_cmd" ]] && echo "ookla:$ookla_cmd"
-
-    cf_cmd=$(find_cloudflare_binary)
-    [[ -n "$cf_cmd" ]] && echo "cloudflare:$cf_cmd"
-
-    fast_cmd=$(find_fast_binary)
-    [[ -n "$fast_cmd" ]] && echo "fast:$fast_cmd"
-
-    sivel_cmd=$(find_sivel_binary)
-    [[ -n "$sivel_cmd" ]] && echo "sivel:$sivel_cmd"
-}
-
 # Format a timestamp for display (cross-platform)
 format_timestamp() {
     local ts="$1"

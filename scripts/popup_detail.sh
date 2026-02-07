@@ -50,9 +50,9 @@ parse_and_display() {
             download=$(extract_json_field "$json" '.download' '"download":\s*[0-9.]+')
             upload=$(extract_json_field "$json" '.upload' '"upload":\s*[0-9.]+')
             ping_val=$(extract_json_field "$json" '.ping' '"ping":\s*[0-9.]+')
-            server_name=$(extract_json_field "$json" '.server.name' '')
-            isp=$(extract_json_field "$json" '.client.isp' '')
-            external_ip=$(extract_json_field "$json" '.client.ip' '')
+            server_name=$(extract_json_field "$json" '.server.name' '"name":\s*"[^"]*"')
+            isp=$(extract_json_field "$json" '.client.isp' '"isp":\s*"[^"]*"')
+            external_ip=$(extract_json_field "$json" '.client.ip' '"ip":\s*"[^"]*"')
             ;;
     esac
 
@@ -87,14 +87,23 @@ parse_and_display() {
     echo ""
 }
 
-# Generate content
-CONTENT=$(parse_and_display "$JSON" "$PROVIDER" "$TIMESTAMP")
+# Generate content to a temp file (avoids quoting issues with special chars)
+TMPFILE=$(mktemp)
+parse_and_display "$JSON" "$PROVIDER" "$TIMESTAMP" > "$TMPFILE"
+
+# Write a self-contained display script (avoids shell compatibility issues)
+TMPSCRIPT=$(mktemp)
+cat > "$TMPSCRIPT" <<SCRIPT
+#!/usr/bin/env bash
+cat '$TMPFILE'
+read -rsn1
+rm -f '$TMPFILE' '$TMPSCRIPT'
+SCRIPT
+chmod +x "$TMPSCRIPT"
 
 # Display via popup or split-pane fallback
 if supports_popup; then
-    tmux display-popup -E -w 50 -h 20 \
-        "echo '$CONTENT'; read -rsn1"
+    tmux display-popup -E -w 50 -h 20 "$TMPSCRIPT"
 else
-    tmux split-window -v -l 20 \
-        "echo '$CONTENT'; read -rsn1"
+    tmux split-window -v -l 20 "$TMPSCRIPT"
 fi
