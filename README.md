@@ -31,6 +31,9 @@ A tmux plugin to run internet speed tests and display results in your status bar
 - Fully configurable format, icons, and key bindings
 - Shows progress indicator while running
 - Prevents multiple concurrent tests
+- **Color-coded results** - configurable thresholds for good/warn/bad speeds and ping
+- **Auto-run on interval** - schedule periodic tests automatically
+- **Detail popup** - view full test results including server, ISP, jitter, and packet loss (`prefix + d`)
 
 ## Requirements
 
@@ -40,6 +43,8 @@ One of the following speedtest CLI tools must be installed:
 - [cloudflare-speed-cli](https://github.com/kavehtehrani/cloudflare-speed-cli) (Cloudflare)
 - [fast-cli](https://github.com/sindresorhus/fast-cli) (Netflix's fast.com)
 - [speedtest-cli](https://github.com/sivel/speedtest-cli) (Python)
+
+**Optional:** [jq](https://jqlang.github.io/jq/) for more robust JSON parsing (falls back to grep if unavailable).
 
 ### Installation
 
@@ -122,6 +127,14 @@ set -g status-left '#{speedtest_result} [#S]'
 
 3. Results appear in status bar: `↓ 250 Mbps ↑ 25 Mbps 15ms`
 
+### Key Bindings
+
+| Key | Action | Option |
+|-----|--------|--------|
+| `prefix + o` | Run speedtest | `@speedtest_key` |
+| `prefix + O` | Clear results | `@speedtest_clear_key` |
+| `prefix + d` | Detail popup (full results) | `@speedtest_detail_key` |
+
 ## Configuration
 
 Add these to your `~/.tmux.conf` before the plugin loads:
@@ -132,6 +145,9 @@ set -g @speedtest_key 'o'
 
 # Key binding to clear results (default: O)
 set -g @speedtest_clear_key 'O'
+
+# Key binding for detail popup (default: d)
+set -g @speedtest_detail_key 'd'
 
 # Output format (default shown)
 set -g @speedtest_format '↓ #{download} ↑ #{upload} #{ping}'
@@ -151,6 +167,49 @@ set -g @speedtest_server ''
 
 # Enable/Disable notifications (default: on)
 set -g @speedtest_notifications 'on'
+
+# Timeout in seconds for each test (default: 120)
+set -g @speedtest_timeout '120'
+```
+
+### Auto-Run
+
+Run tests automatically on a schedule:
+
+```bash
+# Run a test when tmux starts (default: off)
+set -g @speedtest_run_on_start 'on'
+
+# Auto-run interval (default: 0, disabled)
+# Supports: plain seconds (e.g., 3600), or units:
+#   - seconds:  "30s"
+#   - minutes:  "30m"
+#   - hours:    "1h"
+#   - days:     "2d"
+# You can also combine units, e.g., "1h30m". Use "0", "off", or "disabled" to turn this off.
+set -g @speedtest_interval '30m'
+```
+
+### Color-Coded Results
+
+Enable color-coded speeds and ping in the status bar based on configurable thresholds:
+
+```bash
+# Enable color coding (default: off)
+set -g @speedtest_colors 'on'
+
+# Speed thresholds in Mbps (values >= good = green, >= bad and < good = yellow, < bad = red)
+set -g @speedtest_threshold_good '100'
+set -g @speedtest_threshold_bad '25'
+
+# Ping thresholds in ms (values <= good = green, <= bad and > good = yellow, > bad = red)
+set -g @speedtest_ping_threshold_good '30'
+set -g @speedtest_ping_threshold_bad '100'
+
+# Custom colors (default: green, yellow, red)
+set -g @speedtest_color_good 'green'
+set -g @speedtest_color_warn 'yellow'
+set -g @speedtest_color_bad 'red'
 ```
 
 ### Format Placeholders
@@ -222,6 +281,9 @@ Make sure `#{speedtest_result}` is in your `status-right` or `status-left` confi
 
 ### Test fails
 Check your internet connection. Try running `speedtest`, `fast`, or `speedtest-cli` directly in terminal to see detailed errors.
+
+### Detail popup opens in a split pane instead of a popup
+The `display-popup` command requires tmux 3.2 or later. On older versions, the plugin automatically falls back to a split pane.
 
 ### speedtest-cli gets 403 error
 The Python `speedtest-cli` sometimes gets blocked by Speedtest.net. Use the Ookla CLI or fast-cli instead:
