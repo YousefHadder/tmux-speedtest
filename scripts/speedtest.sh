@@ -122,7 +122,8 @@ run_speedtest_background() {
             download=$(echo "$OUTPUT" | jq -r '.download.bandwidth' 2>/dev/null)
             upload=$(echo "$OUTPUT" | jq -r '.upload.bandwidth' 2>/dev/null)
             ping_val=$(echo "$OUTPUT" | jq -r '.ping.latency' 2>/dev/null)
-        else
+        fi
+        if [[ -z "$download" || "$download" == "null" ]]; then
             download=$(echo "$OUTPUT" | grep -oE '"bandwidth":\s*[0-9.]+' | head -1 | grep -oE '[0-9.]+')
             upload=$(echo "$OUTPUT" | grep -oE '"bandwidth":\s*[0-9.]+' | tail -1 | grep -oE '[0-9.]+')
             ping_val=$(echo "$OUTPUT" | grep -oE '"latency":\s*[0-9.]+' | head -1 | grep -oE '[0-9.]+')
@@ -133,7 +134,8 @@ run_speedtest_background() {
             download=$(echo "$OUTPUT" | jq -r '.downloadSpeed' 2>/dev/null)
             upload=$(echo "$OUTPUT" | jq -r '.uploadSpeed' 2>/dev/null)
             ping_val=$(echo "$OUTPUT" | jq -r '.latency' 2>/dev/null)
-        else
+        fi
+        if [[ -z "$download" || "$download" == "null" ]]; then
             download=$(echo "$OUTPUT" | grep -oE '"downloadSpeed":\s*[0-9.]+' | grep -oE '[0-9.]+')
             upload=$(echo "$OUTPUT" | grep -oE '"uploadSpeed":\s*[0-9.]+' | grep -oE '[0-9.]+')
             ping_val=$(echo "$OUTPUT" | grep -oE '"latency":\s*[0-9.]+' | grep -oE '[0-9.]+')
@@ -144,7 +146,8 @@ run_speedtest_background() {
             download=$(echo "$OUTPUT" | jq -r '.download.mbps // 0' 2>/dev/null)
             upload=$(echo "$OUTPUT" | jq -r '.upload.mbps // 0' 2>/dev/null)
             ping_val=$(echo "$OUTPUT" | jq -r '.idle_latency.median_ms // 0' 2>/dev/null)
-        else
+        fi
+        if [[ -z "$download" || "$download" == "null" ]]; then
             download=$(echo "$OUTPUT" | grep -oE '"mbps":\s*[0-9.]+' | head -1 | grep -oE '[0-9.]+')
             upload=$(echo "$OUTPUT" | grep -oE '"mbps":\s*[0-9.]+' | tail -1 | grep -oE '[0-9.]+')
             ping_val=$(echo "$OUTPUT" | grep -oE '"median_ms":\s*[0-9.]+' | head -1 | grep -oE '[0-9.]+')
@@ -155,7 +158,8 @@ run_speedtest_background() {
             download=$(echo "$OUTPUT" | jq -r '.download' 2>/dev/null)
             upload=$(echo "$OUTPUT" | jq -r '.upload' 2>/dev/null)
             ping_val=$(echo "$OUTPUT" | jq -r '.ping' 2>/dev/null)
-        else
+        fi
+        if [[ -z "$download" || "$download" == "null" ]]; then
             download=$(echo "$OUTPUT" | grep -oE '"download":\s*[0-9.]+' | grep -oE '[0-9.]+')
             upload=$(echo "$OUTPUT" | grep -oE '"upload":\s*[0-9.]+' | grep -oE '[0-9.]+')
             ping_val=$(echo "$OUTPUT" | grep -oE '"ping":\s*[0-9.]+' | grep -oE '[0-9.]+')
