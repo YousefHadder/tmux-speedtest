@@ -50,29 +50,30 @@ identify_speedtest_type() {
 
 # Find the Ookla speedtest binary (checking common locations)
 find_ookla_binary() {
-    # Check Homebrew opt path first (handles shadowing by Python version)
-    local brew_path="/opt/homebrew/opt/speedtest/bin/speedtest"
-    if [[ -x "$brew_path" ]]; then
-        local type
-        type=$(identify_speedtest_type "$brew_path")
-        if [[ "$type" == "ookla" ]]; then
-            echo "$brew_path"
-            return
-        fi
-    fi
+    local paths=(
+        "/opt/homebrew/opt/speedtest/bin/speedtest"                     # macOS ARM Homebrew
+        "/usr/local/opt/speedtest/bin/speedtest"                        # macOS Intel Homebrew
+        "$HOME/.linuxbrew/opt/speedtest/bin/speedtest"                  # Linuxbrew user
+        "/home/linuxbrew/.linuxbrew/opt/speedtest/bin/speedtest"        # Linuxbrew system
+        "/usr/bin/speedtest"                                            # Linux system package
+        "/usr/local/bin/speedtest"                                      # Linux local install
+        "/snap/bin/speedtest"                                           # Ubuntu Snap
+        "/usr/sbin/speedtest"                                           # Linux sbin
+    )
 
-    # Check Intel Homebrew path
-    local brew_intel_path="/usr/local/opt/speedtest/bin/speedtest"
-    if [[ -x "$brew_intel_path" ]]; then
-        local type
-        type=$(identify_speedtest_type "$brew_intel_path")
-        if [[ "$type" == "ookla" ]]; then
-            echo "$brew_intel_path"
-            return
+    local path
+    for path in "${paths[@]}"; do
+        if [[ -x "$path" ]]; then
+            local type
+            type=$(identify_speedtest_type "$path")
+            if [[ "$type" == "ookla" ]]; then
+                echo "$path"
+                return
+            fi
         fi
-    fi
+    done
 
-    # Check if speedtest in PATH is Ookla
+    # PATH fallback
     if command -v speedtest &>/dev/null; then
         local type
         type=$(identify_speedtest_type speedtest)
@@ -87,6 +88,23 @@ find_ookla_binary() {
 
 # Find the sivel speedtest-cli binary
 find_sivel_binary() {
+    local paths=(
+        "$HOME/.linuxbrew/bin/speedtest-cli"                            # Linuxbrew user
+        "/home/linuxbrew/.linuxbrew/bin/speedtest-cli"                  # Linuxbrew system
+        "/usr/bin/speedtest-cli"                                        # Linux system package
+        "/usr/local/bin/speedtest-cli"                                  # pip system install
+        "$HOME/.local/bin/speedtest-cli"                                # pip --user install
+    )
+
+    local path
+    for path in "${paths[@]}"; do
+        if [[ -x "$path" ]]; then
+            echo "$path"
+            return
+        fi
+    done
+
+    # PATH fallback
     if command -v speedtest-cli &>/dev/null; then
         echo "speedtest-cli"
         return
@@ -107,6 +125,21 @@ find_sivel_binary() {
 
 # Find the fast-cli binary (Netflix fast.com)
 find_fast_binary() {
+    local paths=(
+        "$HOME/.npm-global/bin/fast"                                    # npm custom prefix
+        "$HOME/.local/bin/fast"                                         # some npm configs
+        "/usr/local/bin/fast"                                           # system npm install
+    )
+
+    local path
+    for path in "${paths[@]}"; do
+        if [[ -x "$path" ]]; then
+            echo "$path"
+            return
+        fi
+    done
+
+    # PATH fallback
     if command -v fast &>/dev/null; then
         echo "fast"
         return
@@ -117,6 +150,23 @@ find_fast_binary() {
 
 # Find the Cloudflare speedtest CLI binary
 find_cloudflare_binary() {
+    local paths=(
+        "$HOME/.cargo/bin/cloudflare-speed-cli"                         # Cargo user install
+        "$HOME/.linuxbrew/bin/cloudflare-speed-cli"                     # Linuxbrew user
+        "/home/linuxbrew/.linuxbrew/bin/cloudflare-speed-cli"           # Linuxbrew system
+        "/usr/local/bin/cloudflare-speed-cli"                           # manual install
+        "/opt/homebrew/bin/cloudflare-speed-cli"                        # macOS Homebrew
+    )
+
+    local path
+    for path in "${paths[@]}"; do
+        if [[ -x "$path" ]]; then
+            echo "$path"
+            return
+        fi
+    done
+
+    # PATH fallback
     if command -v cloudflare-speed-cli &>/dev/null; then
         echo "cloudflare-speed-cli"
         return
