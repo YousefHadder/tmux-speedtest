@@ -106,7 +106,7 @@ chmod +x "$TMPSCRIPT"
 
 # Display via popup or split-pane fallback
 if supports_popup; then
-    tmux display-popup -E -w 50 -h 20 "$TMPSCRIPT"
+    tmux display-popup -E -w 70 -h 20 "$TMPSCRIPT"
 else
     tmux split-window -v -l 20 "$TMPSCRIPT"
 fi
