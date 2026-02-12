@@ -37,7 +37,7 @@ A tmux plugin to run internet speed tests and display results in your status bar
 - Prevents multiple concurrent tests
 - **Color-coded results** - configurable thresholds for good/warn/bad speeds and ping
 - **Auto-run on interval** - schedule periodic tests automatically
-- **Detail popup** - view full test results including server, ISP, jitter, and packet loss (`prefix + d`)
+- **Detail popup** - view full test results including server, ISP, jitter, and packet loss (`prefix + S`)
 
 ## Requirements
 
@@ -137,7 +137,7 @@ set -g status-left '#{speedtest_result} [#S]'
 |-----|--------|--------|
 | `prefix + o` | Run speedtest | `@speedtest_key` |
 | `prefix + O` | Clear results | `@speedtest_clear_key` |
-| `prefix + d` | Detail popup (full results) | `@speedtest_detail_key` |
+| `prefix + S` | Detail popup (full results) | `@speedtest_detail_key` |
 
 ## Configuration
 
@@ -151,7 +151,7 @@ set -g @speedtest_key 'o'
 set -g @speedtest_clear_key 'O'
 
 # Key binding for detail popup (default: d)
-set -g @speedtest_detail_key 'd'
+set -g @speedtest_detail_key 'S'
 
 # Output format (default shown)
 set -g @speedtest_format '↓ #{download} ↑ #{upload} #{ping}'
