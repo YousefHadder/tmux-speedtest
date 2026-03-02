@@ -39,10 +39,14 @@ update_status_interpolation() {
 update_status_interpolation "status-right"
 update_status_interpolation "status-left"
 
-# Run on tmux start if enabled
+# Run once per tmux server start if enabled (avoid retrigger on repeated source-file)
 if [[ "$(get_tmux_option "@speedtest_run_on_start" "off")" == "on" ]]; then
-    "$CURRENT_DIR/scripts/speedtest.sh" &
-    disown
+    RUN_ON_START_DONE=$(get_tmux_option "@speedtest_run_on_start_done" "off")
+    if [[ "$RUN_ON_START_DONE" != "on" ]]; then
+        set_tmux_option "@speedtest_run_on_start_done" "on"
+        "$CURRENT_DIR/scripts/speedtest.sh" &
+        disown
+    fi
 fi
 
 # Start interval runner if configured
