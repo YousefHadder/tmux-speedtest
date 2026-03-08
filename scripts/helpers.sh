@@ -525,6 +525,8 @@ ping_to_ms() {
 
 LOCK_FILE="/tmp/tmux-speedtest.lock"
 LOCK_MAX_AGE=300
+LAST_RUN_FILE="/tmp/tmux-speedtest-last-run"
+BACKOFF_UNTIL_FILE="/tmp/tmux-speedtest-backoff-until"
 
 # Get age of a file in seconds (cross-platform)
 file_age_seconds() {
@@ -624,6 +626,124 @@ parse_time_to_seconds() {
 # Get current Unix timestamp
 get_current_timestamp() {
     date +%s
+}
+
+# Read a Unix timestamp from file
+# Returns 0 if file is missing/corrupt
+read_timestamp_file() {
+    local file="$1"
+    local value
+
+    if [[ ! -f "$file" ]]; then
+        echo "0"
+        return
+    fi
+
+    value=$(cat "$file" 2>/dev/null)
+    if [[ "$value" =~ ^[0-9]+$ ]]; then
+        echo "$value"
+    else
+        echo "0"
+    fi
+}
+
+# Write Unix timestamp to file (best effort)
+write_timestamp_file() {
+    local file="$1"
+    local timestamp="$2"
+
+    if [[ "$timestamp" =~ ^[0-9]+$ ]]; then
+        printf "%s" "$timestamp" > "$file" 2>/dev/null
+    fi
+}
+
+# Get last successful run timestamp from tmux option or persisted file
+get_last_run_timestamp() {
+    local tmux_last_run
+    local file_last_run
+
+    tmux_last_run=$(get_tmux_option "@speedtest_last_run" "0")
+    file_last_run=$(read_timestamp_file "$LAST_RUN_FILE")
+
+    if ! [[ "$tmux_last_run" =~ ^[0-9]+$ ]]; then
+        tmux_last_run="0"
+    fi
+
+    if [[ "$tmux_last_run" -ge "$file_last_run" ]]; then
+        echo "$tmux_last_run"
+    else
+        echo "$file_last_run"
+    fi
+}
+
+# Persist last successful run timestamp in tmux and /tmp for restart survival
+persist_last_run_timestamp() {
+    local timestamp="$1"
+
+    if ! [[ "$timestamp" =~ ^[0-9]+$ ]]; then
+        return
+    fi
+
+    set_tmux_option "@speedtest_last_run" "$timestamp"
+    write_timestamp_file "$LAST_RUN_FILE" "$timestamp"
+}
+
+# Get active backoff-until timestamp from tmux option or persisted file
+get_backoff_until_timestamp() {
+    local tmux_backoff_until
+    local file_backoff_until
+
+    tmux_backoff_until=$(get_tmux_option "@speedtest_backoff_until" "0")
+    file_backoff_until=$(read_timestamp_file "$BACKOFF_UNTIL_FILE")
+
+    if ! [[ "$tmux_backoff_until" =~ ^[0-9]+$ ]]; then
+        tmux_backoff_until="0"
+    fi
+
+    if [[ "$tmux_backoff_until" -ge "$file_backoff_until" ]]; then
+        echo "$tmux_backoff_until"
+    else
+        echo "$file_backoff_until"
+    fi
+}
+
+# Persist backoff-until timestamp in tmux and /tmp for restart survival
+set_backoff_until_timestamp() {
+    local timestamp="$1"
+
+    if ! [[ "$timestamp" =~ ^[0-9]+$ ]]; then
+        return
+    fi
+
+    set_tmux_option "@speedtest_backoff_until" "$timestamp"
+    write_timestamp_file "$BACKOFF_UNTIL_FILE" "$timestamp"
+}
+
+# Clear persisted backoff state
+clear_backoff_until_timestamp() {
+    set_tmux_option "@speedtest_backoff_until" "0"
+    rm -f "$BACKOFF_UNTIL_FILE"
+}
+
+# Return backoff remaining seconds, clearing stale backoff automatically
+get_backoff_remaining_seconds() {
+    local backoff_until
+    local now
+
+    backoff_until=$(get_backoff_until_timestamp)
+    if [[ "$backoff_until" -eq 0 ]]; then
+        echo "0"
+        return
+    fi
+
+    now=$(get_current_timestamp)
+    if [[ "$backoff_until" -le "$now" ]]; then
+        clear_backoff_until_timestamp
+        echo "0"
+        return
+    fi
+
+    echo $((backoff_until - now))
 }
 
 # Check if speedtest result has expired

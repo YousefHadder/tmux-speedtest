@@ -174,6 +174,14 @@ set -g @speedtest_notifications 'on'
 
 # Timeout in seconds for each test (default: 120)
 set -g @speedtest_timeout '120'
+
+# Minimum time between tests (default: 0, disabled)
+# Supports same syntax as @speedtest_interval (e.g., 30s, 5m, 1h30m)
+set -g @speedtest_min_interval '0'
+
+# Temporary backoff duration after provider rate-limit response (default: 10m)
+# Use 0/off/disabled to disable automatic backoff
+set -g @speedtest_rate_limit_backoff '10m'
 ```
 
 ### Auto-Run
@@ -285,6 +293,20 @@ Make sure `#{speedtest_result}` is in your `status-right` or `status-left` confi
 
 ### Test fails
 Check your internet connection. Try running `speedtest`, `fast`, or `speedtest-cli` directly in terminal to see detailed errors.
+
+### Hitting provider rate limits while reloading tmux often
+Use cooldown and backoff settings to reduce test frequency:
+```bash
+# Prevent tests from running too frequently
+set -g @speedtest_min_interval '5m'
+
+# If provider reports rate-limit, wait before retrying
+set -g @speedtest_rate_limit_backoff '15m'
+
+# During heavy config iteration, disable auto-runs temporarily
+set -g @speedtest_run_on_start 'off'
+set -g @speedtest_interval '0'
+```
 
 ### Detail popup opens in a split pane instead of a popup
 The `display-popup` command requires tmux 3.2 or later. On older versions, the plugin automatically falls back to a split pane.
