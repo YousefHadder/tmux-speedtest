@@ -12,18 +12,67 @@ if [[ -f "$LOCK_FILE" ]]; then
     release_lock
 fi
 
+# Check if provider response indicates throttling/rate limiting
+is_rate_limit_error() {
+    local raw="$1"
+    local normalized
+    normalized=$(echo "$raw" | tr '[:upper:]' '[:lower:]')
+
+    [[ "$normalized" == *"rate limit"* || \
+       "$normalized" == *"too many request"* || \
+       "$normalized" == *"too many test"* || \
+       "$normalized" == *"try again later"* || \
+       "$normalized" == *"quota"* || \
+       "$normalized" == *"http 429"* || \
+       "$normalized" == *"error 429"* || \
+       "$normalized" == *"429 too many"* || \
+       "$normalized" == *"status code: 429"* ]]
+}
+
 # Run the actual speedtest in background
 run_speedtest_background() {
+    NOTIFICATIONS_ENABLED=$(get_tmux_option "@speedtest_notifications" "on")
+
+    # Respect temporary backoff after provider throttling
+    BACKOFF_REMAINING=$(get_backoff_remaining_seconds)
+    if [[ "$BACKOFF_REMAINING" -gt 0 ]]; then
+        if [[ "$NOTIFICATIONS_ENABLED" != "off" ]]; then
+            tmux display-message "speedtest: Backoff active (${BACKOFF_REMAINING}s remaining)"
+        fi
+        exit 0
+    fi
+
+    # Optional minimum time between tests (survives tmux restart)
+    MIN_INTERVAL_OPTION=$(get_tmux_option "@speedtest_min_interval" "0")
+    MIN_INTERVAL_SECS=$(parse_time_to_seconds "$MIN_INTERVAL_OPTION")
+    if [[ "$MIN_INTERVAL_SECS" -gt 0 ]]; then
+        LAST_RUN_TS=$(get_last_run_timestamp)
+        if [[ "$LAST_RUN_TS" -gt 0 ]]; then
+            NOW_TS=$(get_current_timestamp)
+            AGE_SECS=$((NOW_TS - LAST_RUN_TS))
+            if [[ "$AGE_SECS" -lt "$MIN_INTERVAL_SECS" ]]; then
+                REMAINING_SECS=$((MIN_INTERVAL_SECS - AGE_SECS))
+                if [[ "$NOTIFICATIONS_ENABLED" != "off" ]]; then
+                    tmux display-message "speedtest: Cooldown active (${REMAINING_SECS}s remaining)"
+                fi
+                exit 0
+            fi
+        fi
+    fi
+
     # Atomically acquire lock — exit if another process won the race
     if ! acquire_lock; then
         tmux display-message "speedtest: Already running..."
         exit 0
     fi
-    trap 'release_lock' EXIT
-
-    if [[ "$(get_tmux_option "@speedtest_notifications" "on")" != "off" ]]; then
-        tmux display-message "speedtest: Starting..."
-    fi
+    local stdout_file=""
+    local stderr_file=""
+    cleanup_run() {
+        [[ -n "$stdout_file" ]] && rm -f "$stdout_file"
+        [[ -n "$stderr_file" ]] && rm -f "$stderr_file"
+        release_lock
+    }
+    trap cleanup_run EXIT
 
     # Configuration
     FORMAT=$(get_tmux_option "@speedtest_format" "↓ #{download} ↑ #{upload} #{ping}")
@@ -38,6 +87,10 @@ run_speedtest_background() {
         PREVIOUS_RESULT="$ICON_IDLE"
     else
         PREVIOUS_RESULT="$CURRENT_VAL"
+    fi
+
+    if [[ "$NOTIFICATIONS_ENABLED" != "off" ]]; then
+        tmux display-message "speedtest: Starting..."
     fi
 
     # Show running indicator
@@ -63,7 +116,7 @@ run_speedtest_background() {
     local requested_provider
     requested_provider=$(get_tmux_option "@speedtest_provider" "auto")
     if [[ "$requested_provider" != "auto" && "$CLI_TYPE" != "$requested_provider" ]]; then
-        if [[ "$(get_tmux_option "@speedtest_notifications" "on")" != "off" ]]; then
+        if [[ "$NOTIFICATIONS_ENABLED" != "off" ]]; then
             tmux display-message "speedtest: '$requested_provider' not found, using $CLI_TYPE instead"
         fi
     fi
@@ -97,37 +150,47 @@ run_speedtest_background() {
 
     # Execute with timeout — try coreutils timeout first, fall back to bg+sleep+kill
     local EXIT_CODE
+    local ERROR_OUTPUT
+    stdout_file=$(mktemp)
+    stderr_file=$(mktemp)
+
     if command -v timeout &>/dev/null; then
-        OUTPUT=$(timeout "$TIMEOUT_SECS" "${cmd[@]}" 2>/dev/null)
+        timeout "$TIMEOUT_SECS" "${cmd[@]}" > "$stdout_file" 2> "$stderr_file"
         EXIT_CODE=$?
     else
-        local tmpfile
-        tmpfile=$(mktemp)
-        trap 'rm -f "$tmpfile"; release_lock' EXIT
-        "${cmd[@]}" > "$tmpfile" 2>/dev/null &
+        "${cmd[@]}" > "$stdout_file" 2> "$stderr_file" &
         local child=$!
         ( sleep "$TIMEOUT_SECS" && kill "$child" 2>/dev/null ) &
         local watcher=$!
         wait "$child" 2>/dev/null
-        local child_exit=$?
-        if [[ $child_exit -eq 0 ]]; then
-            OUTPUT=$(cat "$tmpfile")
-        else
-            OUTPUT=""
-        fi
+        EXIT_CODE=$?
         kill "$watcher" 2>/dev/null
         wait "$watcher" 2>/dev/null
-        rm -f "$tmpfile"
-        EXIT_CODE=$child_exit
     fi
 
+    OUTPUT=$(cat "$stdout_file")
+    ERROR_OUTPUT=$(cat "$stderr_file")
+
     if [[ $EXIT_CODE -ne 0 || -z "$OUTPUT" ]]; then
-        tmux display-message "speedtest: Test failed"
+        if is_rate_limit_error "$ERROR_OUTPUT$OUTPUT"; then
+            BACKOFF_OPTION=$(get_tmux_option "@speedtest_rate_limit_backoff" "10m")
+            BACKOFF_SECS=$(parse_time_to_seconds "$BACKOFF_OPTION")
+            if [[ "$BACKOFF_SECS" -gt 0 ]]; then
+                set_backoff_until_timestamp "$(( $(get_current_timestamp) + BACKOFF_SECS ))"
+                tmux display-message "speedtest: Rate-limited; backing off for ${BACKOFF_SECS}s"
+            else
+                tmux display-message "speedtest: Rate-limited by provider"
+            fi
+        else
+            tmux display-message "speedtest: Test failed"
+        fi
         sleep 2
         set_tmux_option "@speedtest_result" "$PREVIOUS_RESULT"
         tmux refresh-client -S
         exit 1
     fi
+
+    clear_backoff_until_timestamp
 
     # Parse results based on CLI type
     local download upload ping_val
@@ -222,7 +285,7 @@ run_speedtest_background() {
 
     # Update status bar
     set_tmux_option "@speedtest_result" "$RESULT"
-    set_tmux_option "@speedtest_last_run" "$(get_current_timestamp)"
+    persist_last_run_timestamp "$(get_current_timestamp)"
     tmux refresh-client -S
 
     # Store full results for detail popup
@@ -231,7 +294,7 @@ run_speedtest_background() {
     set_tmux_option "@speedtest_result_provider" "$CLI_TYPE"
 
     # Show notification if not disabled
-    if [[ "$(get_tmux_option "@speedtest_notifications" "on")" != "off" ]]; then
+    if [[ "$NOTIFICATIONS_ENABLED" != "off" ]]; then
         tmux display-message "speedtest: Done - $RESULT"
     fi
 }

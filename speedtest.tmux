@@ -16,8 +16,10 @@ tmux bind-key "$DETAIL_KEY" run-shell -b "$CURRENT_DIR/scripts/popup_detail.sh"
 
 # Set up status bar interpolation
 # This allows users to use #{speedtest_result} in their status bar
-# Default to empty string so it doesn't show initially if auto-hide is desired
-tmux set-option -gq @speedtest_result "$(get_tmux_option "@speedtest_icon_idle" "—")"
+# Only initialize if unset to avoid resetting state on every source-file
+if ! tmux show-option -g @speedtest_result >/dev/null 2>&1; then
+    tmux set-option -gq @speedtest_result "$(get_tmux_option "@speedtest_icon_idle" "—")"
+fi
 
 # Set up status interpolation script path
 STATUS_SCRIPT="$CURRENT_DIR/scripts/speedtest_status.sh"
