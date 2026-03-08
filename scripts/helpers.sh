@@ -525,8 +525,37 @@ ping_to_ms() {
 
 LOCK_FILE="/tmp/tmux-speedtest.lock"
 LOCK_MAX_AGE=300
-LAST_RUN_FILE="/tmp/tmux-speedtest-last-run"
-BACKOFF_UNTIL_FILE="/tmp/tmux-speedtest-backoff-until"
+CURRENT_UID="${UID:-0}"
+STATE_DIR="${XDG_RUNTIME_DIR:-/tmp}/tmux-speedtest-${CURRENT_UID}"
+
+if [[ -L "$STATE_DIR" ]]; then
+    STATE_DIR=""
+elif [[ -d "$STATE_DIR" ]]; then
+    state_owner_uid=$(stat -f %u "$STATE_DIR" 2>/dev/null)
+    if [[ -z "$state_owner_uid" ]]; then
+        state_owner_uid=$(stat -c %u "$STATE_DIR" 2>/dev/null)
+    fi
+
+    if [[ "$state_owner_uid" != "$CURRENT_UID" || ! -w "$STATE_DIR" ]]; then
+        STATE_DIR=""
+    else
+        chmod 700 "$STATE_DIR" 2>/dev/null
+    fi
+else
+    if mkdir -p "$STATE_DIR" 2>/dev/null; then
+        chmod 700 "$STATE_DIR" 2>/dev/null
+    else
+        STATE_DIR=""
+    fi
+fi
+
+if [[ -n "$STATE_DIR" ]]; then
+    LAST_RUN_FILE="$STATE_DIR/last-run"
+    BACKOFF_UNTIL_FILE="$STATE_DIR/backoff-until"
+else
+    LAST_RUN_FILE=""
+    BACKOFF_UNTIL_FILE=""
+fi
 
 # Get age of a file in seconds (cross-platform)
 file_age_seconds() {
@@ -628,13 +657,27 @@ get_current_timestamp() {
     date +%s
 }
 
+# Return whether a state file is a regular file and not a symlink
+is_safe_state_file() {
+    local file="$1"
+    [[ -n "$file" && -f "$file" && ! -L "$file" ]]
+}
+
+# Remove state file only when it is a regular non-symlink
+remove_state_file() {
+    local file="$1"
+    if is_safe_state_file "$file"; then
+        rm -f "$file"
+    fi
+}
+
 # Read a Unix timestamp from file
 # Returns 0 if file is missing/corrupt
 read_timestamp_file() {
     local file="$1"
     local value
 
-    if [[ ! -f "$file" ]]; then
+    if ! is_safe_state_file "$file"; then
         echo "0"
         return
     fi
@@ -652,9 +695,23 @@ write_timestamp_file() {
     local file="$1"
     local timestamp="$2"
 
-    if [[ "$timestamp" =~ ^[0-9]+$ ]]; then
-        printf "%s" "$timestamp" > "$file" 2>/dev/null
+    if ! [[ "$timestamp" =~ ^[0-9]+$ ]]; then
+        return
     fi
+
+    if [[ -z "$file" ]]; then
+        return
+    fi
+
+    if [[ -e "$file" && ! -f "$file" ]]; then
+        return
+    fi
+
+    if [[ -L "$file" ]]; then
+        return
+    fi
+
+    printf "%s" "$timestamp" > "$file" 2>/dev/null
 }
 
 # Get last successful run timestamp from tmux option or persisted file
@@ -685,7 +742,12 @@ persist_last_run_timestamp() {
     fi
 
     set_tmux_option "@speedtest_last_run" "$timestamp"
-    write_timestamp_file "$LAST_RUN_FILE" "$timestamp"
+
+    if [[ "$timestamp" == "0" ]]; then
+        remove_state_file "$LAST_RUN_FILE"
+    else
+        write_timestamp_file "$LAST_RUN_FILE" "$timestamp"
+    fi
 }
 
 # Get active backoff-until timestamp from tmux option or persisted file
@@ -716,13 +778,17 @@ set_backoff_until_timestamp() {
     fi
 
     set_tmux_option "@speedtest_backoff_until" "$timestamp"
-    write_timestamp_file "$BACKOFF_UNTIL_FILE" "$timestamp"
+    if [[ "$timestamp" == "0" ]]; then
+        remove_state_file "$BACKOFF_UNTIL_FILE"
+    else
+        write_timestamp_file "$BACKOFF_UNTIL_FILE" "$timestamp"
+    fi
 }
 
 # Clear persisted backoff state
 clear_backoff_until_timestamp() {
     set_tmux_option "@speedtest_backoff_until" "0"
-    rm -f "$BACKOFF_UNTIL_FILE"
+    remove_state_file "$BACKOFF_UNTIL_FILE"
 }
 
 # Return backoff remaining seconds, clearing stale backoff automatically
@@ -761,7 +827,7 @@ is_result_expired() {
     fi
 
     local last_run
-    last_run=$(get_tmux_option "@speedtest_last_run" "0")
+    last_run=$(get_last_run_timestamp)
 
     # No test has been run
     if [[ "$last_run" == "0" || -z "$last_run" ]]; then

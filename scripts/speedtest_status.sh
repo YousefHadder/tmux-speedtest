@@ -12,7 +12,7 @@ RESULT=$(get_tmux_option "@speedtest_result" "")
 # Check if result has expired
 if [[ -n "$RESULT" && "$RESULT" != "$ICON_IDLE" ]] && is_result_expired; then
     set_tmux_option "@speedtest_result" "$ICON_IDLE"
-    set_tmux_option "@speedtest_last_run" "0"
+    persist_last_run_timestamp "0"
     RESULT="$ICON_IDLE"
 fi
 

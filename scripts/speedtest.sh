@@ -23,41 +23,15 @@ is_rate_limit_error() {
        "$normalized" == *"too many test"* || \
        "$normalized" == *"try again later"* || \
        "$normalized" == *"quota"* || \
-       "$normalized" == *"429"* ]]
+       "$normalized" == *"http 429"* || \
+       "$normalized" == *"error 429"* || \
+       "$normalized" == *"429 too many"* || \
+       "$normalized" == *"status code: 429"* ]]
 }
 
 # Run the actual speedtest in background
 run_speedtest_background() {
-    # Atomically acquire lock — exit if another process won the race
-    if ! acquire_lock; then
-        tmux display-message "speedtest: Already running..."
-        exit 0
-    fi
-    local stdout_file=""
-    local stderr_file=""
-    cleanup_run() {
-        [[ -n "$stdout_file" ]] && rm -f "$stdout_file"
-        [[ -n "$stderr_file" ]] && rm -f "$stderr_file"
-        release_lock
-    }
-    trap cleanup_run EXIT
-
     NOTIFICATIONS_ENABLED=$(get_tmux_option "@speedtest_notifications" "on")
-
-    # Configuration
-    FORMAT=$(get_tmux_option "@speedtest_format" "↓ #{download} ↑ #{upload} #{ping}")
-    ICON_RUNNING=$(get_tmux_option "@speedtest_icon_running" "⏳")
-    ICON_IDLE=$(get_tmux_option "@speedtest_icon_idle" "—")
-    SERVER=$(get_tmux_option "@speedtest_server" "")
-
-    # Store current result (to restore on failure)
-    # If currently hidden (empty), use idle icon as fallback
-    CURRENT_VAL=$(get_tmux_option "@speedtest_result" "")
-    if [[ -z "$CURRENT_VAL" ]]; then
-        PREVIOUS_RESULT="$ICON_IDLE"
-    else
-        PREVIOUS_RESULT="$CURRENT_VAL"
-    fi
 
     # Respect temporary backoff after provider throttling
     BACKOFF_REMAINING=$(get_backoff_remaining_seconds)
@@ -84,6 +58,35 @@ run_speedtest_background() {
                 exit 0
             fi
         fi
+    fi
+
+    # Atomically acquire lock — exit if another process won the race
+    if ! acquire_lock; then
+        tmux display-message "speedtest: Already running..."
+        exit 0
+    fi
+    local stdout_file=""
+    local stderr_file=""
+    cleanup_run() {
+        [[ -n "$stdout_file" ]] && rm -f "$stdout_file"
+        [[ -n "$stderr_file" ]] && rm -f "$stderr_file"
+        release_lock
+    }
+    trap cleanup_run EXIT
+
+    # Configuration
+    FORMAT=$(get_tmux_option "@speedtest_format" "↓ #{download} ↑ #{upload} #{ping}")
+    ICON_RUNNING=$(get_tmux_option "@speedtest_icon_running" "⏳")
+    ICON_IDLE=$(get_tmux_option "@speedtest_icon_idle" "—")
+    SERVER=$(get_tmux_option "@speedtest_server" "")
+
+    # Store current result (to restore on failure)
+    # If currently hidden (empty), use idle icon as fallback
+    CURRENT_VAL=$(get_tmux_option "@speedtest_result" "")
+    if [[ -z "$CURRENT_VAL" ]]; then
+        PREVIOUS_RESULT="$ICON_IDLE"
+    else
+        PREVIOUS_RESULT="$CURRENT_VAL"
     fi
 
     if [[ "$NOTIFICATIONS_ENABLED" != "off" ]]; then
